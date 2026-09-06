@@ -1,0 +1,102 @@
+/* Judge-facing readability pass. Loaded last so SafeShift keeps its existing layout,
+   map treatment and visual system while avoiding tiny labels on projectors/laptops. */
+
+body { font-size: 15px; }
+button, input, select { font-size: 14px; }
+
+/* Landing */
+.brand b { font-size: 15px !important; }
+.brand small { font-size: 11.5px !important; }
+.siteHeader nav { font-size: 13px !important; }
+.headerCta,
+.primaryCta,
+.secondaryCta { font-size: 14px !important; }
+.eyebrow,
+.kicker { font-size: 11px !important; }
+.heroCopy > p { font-size: 17px !important; line-height: 1.7 !important; }
+.trustRow { font-size: 12px !important; }
+.previewHeader span { font-size: 11px !important; }
+.previewHeader b { font-size: 13px !important; }
+.previewMap small { font-size: 11px !important; }
+.previewFooter span { font-size: 11px !important; }
+.previewFooter b { font-size: 14px !important; }
+.sourceStrip small { font-size: 10.5px !important; }
+.sourceStrip b { font-size: 12px !important; }
+.sourceStrip > span { font-size: 10.5px !important; }
+.workflow h3 { font-size: 18px !important; }
+.workflow p { font-size: 13.5px !important; line-height: 1.6 !important; }
+.innovation span { font-size: 10.5px !important; }
+.innovation h3 { font-size: 21px !important; }
+.innovation p,
+.limitsCard p { font-size: 13.5px !important; line-height: 1.6 !important; }
+
+/* Main decision workspace */
+.workspaceHeader { min-height: 62px; }
+.workspaceHeader b { font-size: 14px !important; }
+.workspaceHeader small { font-size: 11.5px !important; }
+.miniBrand { font-size: 13px !important; }
+.outlineButton { font-size: 13px !important; }
+.evidenceStrip { font-size: 11.5px !important; }
+.evidenceStrip em { font-size: 11px !important; }
+.rail button span { font-size: 11px !important; }
+
+.mapHeadline > span { font-size: 11px !important; }
+.mapHeadline > b { font-size: 16px !important; }
+.mapHeadline > small { font-size: 12px !important; }
+.mapDecisionChip b { font-size: 13px !important; }
+.mapDecisionChip span { font-size: 11.5px !important; }
+.mapLoading b { font-size: 14px !important; }
+.mapLoading small { font-size: 11.5px !important; }
+
+.simHud > span { font-size: 10.5px !important; }
+.simHud article span { font-size: 11px !important; }
+.simHud article b { font-size: 16px !important; }
+.simHud footer { font-size: 11px !important; line-height: 1.45 !important; }
+.simClock span { font-size: 11px !important; }
+.simClock b { font-size: 13px !important; }
+.stressControl span { font-size: 11px !important; }
+.stressControl span b { font-size: 13px !important; }
+.roadToggle { font-size: 12px !important; }
+
+.panelTitle span { font-size: 10.5px !important; }
+.panelTitle b { font-size: 14px !important; }
+.decisionHero > span { font-size: 10.5px !important; }
+.decisionHero h2 { font-size: 29px !important; }
+.decisionHero > p { font-size: 14px !important; line-height: 1.55 !important; }
+.metric span { font-size: 11px !important; }
+.metric b { font-size: 16px !important; }
+
+.strategyCompare header span { font-size: 10.5px !important; }
+.strategyCompare header b { font-size: 14px !important; }
+.strategyCard > span { font-size: 10px !important; }
+.strategyCard > b { font-size: 14px !important; }
+.strategyCard dt { font-size: 10.5px !important; }
+.strategyCard dd { font-size: 12px !important; }
+.strategyCard small { font-size: 11px !important; line-height: 1.45 !important; }
+.decisionNext { font-size: 13px !important; }
+
+.simExplanation > span,
+.actionCard > span { font-size: 10.5px !important; }
+.simExplanation > b,
+.actionCard > b { font-size: 14px !important; }
+.simExplanation p,
+.actionCard p { font-size: 12.5px !important; line-height: 1.55 !important; }
+
+/* Map annotations / ground intelligence */
+.groundDataMarker small { font-size: 10px !important; }
+.groundDataMarker b { font-size: 14px !important; }
+.groundDataMarker em { font-size: 11px !important; }
+
+/* Brief page: print still stays compact, screen becomes judge-readable. */
+@media screen {
+  .briefPage small,
+  .briefPage .label { font-size: 11px !important; }
+  .briefPage p,
+  .briefPage li { font-size: 13px !important; line-height: 1.55 !important; }
+}
+
+@media (max-width: 900px) {
+  .heroCopy > p { font-size: 16px !important; }
+  .decisionHero > p { font-size: 13.5px !important; }
+  .strategyCard small { font-size: 10.5px !important; }
+}
