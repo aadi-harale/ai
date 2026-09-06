@@ -1,0 +1,41 @@
+/* Habitat-inspired dotted planning regions + evidence-on-ground labels */
+
+.groundDataMarker{display:flex;align-items:center;gap:7px;pointer-events:none;transform:translateY(-2px);filter:drop-shadow(0 8px 18px rgba(0,0,0,.3))}
+.groundDataMarker>i{width:9px;height:9px;border-radius:50%;background:currentColor;box-shadow:0 0 0 5px color-mix(in srgb,currentColor 12%,transparent);flex:none}
+.groundDataMarker>span{min-width:118px;padding:7px 9px 8px;border:1px solid #355048;border-radius:9px;background:rgba(7,16,14,.90);backdrop-filter:blur(12px);position:relative}
+.groundDataMarker>span:before{content:"";position:absolute;left:-23px;top:50%;width:22px;border-top:1px dotted currentColor;opacity:.55}
+.groundDataMarker small{display:block;font-size:8px;font-weight:800;letter-spacing:.11em;color:currentColor;line-height:1}
+.groundDataMarker b{display:block;margin-top:4px;color:#eef7f3;font-size:12px;line-height:1.05;white-space:nowrap}
+.groundDataMarker em{display:block;margin-top:3px;color:#81978f;font-size:9px;font-style:normal;white-space:nowrap}
+.groundDataMarker.danger{color:#ff7774}.groundDataMarker.amber{color:#f1ba69}.groundDataMarker.cyan{color:#6eddef}.groundDataMarker.lime{color:#b9f27c}
+
+.regionTagMarker{pointer-events:none;display:flex;flex-direction:column;align-items:center;text-align:center;filter:drop-shadow(0 5px 12px rgba(0,0,0,.24))}
+.regionTagMarker>span{padding:5px 8px 4px;border:1px dashed currentColor;border-radius:999px;background:rgba(7,16,14,.84);backdrop-filter:blur(10px);font-size:9px;font-weight:850;letter-spacing:.12em;color:currentColor;white-space:nowrap}
+.regionTagMarker>small{margin-top:4px;padding:2px 5px;background:rgba(7,16,14,.68);border-radius:4px;color:#9aafa7;font-size:8px;white-space:nowrap}
+.regionTagMarker.danger{color:#ff7774}.regionTagMarker.amber{color:#f1ba69}.regionTagMarker.cyan{color:#72d9c1}.regionTagMarker.lime{color:#b9f27c}
+
+/* stronger map legend keys for the new ground layers */
+.mapLegendPro .lgRegion{height:8px!important;width:18px!important;background:transparent!important;border:1px dashed #8fd0bd!important;border-radius:999px!important}
+.mapLegendPro .lgGround{width:9px!important;height:9px!important;border-radius:50%!important;background:#d8f3e9!important;box-shadow:0 0 0 3px rgba(216,243,233,.11)!important}
+
+/* Dotted-region treatment should read like data, not decoration. */
+.mapLegendPro{max-width:630px!important;flex-wrap:wrap!important;row-gap:7px!important}
+.mapLegendPro span{white-space:nowrap}
+
+@keyframes groundPulse{0%,100%{opacity:.72;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}
+@keyframes regionFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}
+.groundDataMarker.danger>i,.groundDataMarker.cyan>i{animation:groundPulse 2.6s ease-in-out infinite}
+.regionTagMarker{animation:regionFloat 4s ease-in-out infinite}
+
+@media(prefers-reduced-motion:reduce){.groundDataMarker>i,.regionTagMarker{animation:none!important}}
+
+@media(max-width:1220px){
+  .groundDataMarker>span{min-width:104px;padding:6px 7px}.groundDataMarker b{font-size:11px}.groundDataMarker em{font-size:8px}
+  .regionTagMarker>span{font-size:8px}.regionTagMarker>small{font-size:7px}
+}
+
+@media(max-width:900px){
+  .groundDataMarker>span{display:none}.groundDataMarker>i{width:8px;height:8px}
+  .regionTagMarker>small{display:none}.regionTagMarker>span{font-size:7px;padding:4px 6px}
+  .mapLegendPro{max-width:92%!important}
+}
