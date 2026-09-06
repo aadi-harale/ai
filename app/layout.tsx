@@ -3,6 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 import "./map-polish.css";
 import "./ground-intel.css";
+import "./readability.css";
 
 export const metadata:Metadata={
   title:"SafeShift — SIH26191",
