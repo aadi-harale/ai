@@ -6,10 +6,6 @@ import {MALIN,cautionZone,redZone,type Site} from "../lib/data";
 
 type RankedSite=Site&{score:number;regret:number;future:number};
 
-// Keep the initial style intentionally tiny. The old version put the DEM in the
-// startup style, so a slow/blocked terrain request could prevent the map from
-// ever reaching its ready state. We now start with the basemap only and add
-// elevation after style.load. Terrain is an enhancement, not a dependency.
 const BASE_STYLE:any={
   version:8,
   sources:{
@@ -29,6 +25,15 @@ const BASE_STYLE:any={
 };
 
 const TERRAIN_TILES=["https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"];
+
+const terrainNoticeStyle:React.CSSProperties={
+  position:"absolute",zIndex:7,right:12,top:12,
+  display:"flex",flexDirection:"column",gap:2,
+  padding:"7px 9px",border:"1px solid #6a5632",borderRadius:8,
+  background:"rgba(24,19,13,.94)",pointerEvents:"none"
+};
+const terrainNoticeTitle:React.CSSProperties={fontSize:7,color:"#f1ba69"};
+const terrainNoticeText:React.CSSProperties={fontSize:6,color:"#9d8868"};
 
 export default function SafeShiftMap({sites,selected,onSelect}:{sites:RankedSite[];selected:string;onSelect:(id:string)=>void}){
   const node=useRef<HTMLDivElement|null>(null);
@@ -69,8 +74,6 @@ export default function SafeShiftMap({sites,selected,onSelect}:{sites:RankedSite
           }
         },12000);
 
-        // style.load does NOT wait for every raster/terrain tile to finish.
-        // This is the key difference from the previous implementation.
         map.on("style.load",()=>{
           if(!map||disposed)return;
           if(startupTimer)window.clearTimeout(startupTimer);
@@ -114,9 +117,6 @@ export default function SafeShiftMap({sites,selected,onSelect}:{sites:RankedSite
             setReady(true);
           }
 
-          // Elevation is deliberately best-effort. Separate DEM sources remove
-          // MapLibre's 'same source for hillshade and terrain' warning and let
-          // either layer fail without taking down the map.
           try{
             map.addSource("terrain-dem",{
               type:"raster-dem",
@@ -156,9 +156,6 @@ export default function SafeShiftMap({sites,selected,onSelect}:{sites:RankedSite
         map.on("error",(event:any)=>{
           const message=String(event?.error?.message||event||"");
           console.warn("[SafeShift map]",message);
-
-          // Terrain tile failures should degrade to a 2D basemap, not cover the
-          // entire workspace with an error screen.
           if(/mapterhorn|terrain|raster-dem|webp/i.test(message)){
             setTerrainStatus("unavailable");
           }
@@ -226,9 +223,9 @@ export default function SafeShiftMap({sites,selected,onSelect}:{sites:RankedSite
     }
 
     {ready&&terrainStatus==="unavailable"&&
-      <div className="terrainNotice">
-        <b>2D fallback active</b>
-        <span>Elevation tiles unavailable · basemap and decision layers are still live</span>
+      <div style={terrainNoticeStyle}>
+        <b style={terrainNoticeTitle}>2D fallback active</b>
+        <span style={terrainNoticeText}>Elevation tiles unavailable · basemap and decision layers are still live</span>
       </div>
     }
   </div>;
