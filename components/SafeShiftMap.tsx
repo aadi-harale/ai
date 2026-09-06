@@ -60,7 +60,6 @@ export default function SafeShiftMap({sites,selected,onSelect}:{sites:RankedSite
           zoom:12.1,
           pitch:58,
           bearing:-16,
-          antialias:true,
           attributionControl:false,
           maxPitch:80
         });
