@@ -7,7 +7,7 @@ import {MALIN,cautionZone,redZone,type Site} from "../lib/data";
 
 type RankedSite=Site&{score:number;regret:number;future:number};
 type Coord=[number,number];
-type LayerState={risk:boolean;flow:boolean;routes:boolean;clusters:boolean;terrain:boolean};
+type LayerState={risk:boolean;flow:boolean;routes:boolean;clusters:boolean;terrain:boolean;ground:boolean};
 
 type Props={
   sites:RankedSite[];
@@ -37,11 +37,11 @@ const BASE_STYLE:any={
   layers:[{
     id:"osm",type:"raster",source:"osm",
     paint:{
-      "raster-saturation":-.74,
-      "raster-hue-rotate":10,
-      "raster-brightness-min":.07,
-      "raster-brightness-max":.43,
-      "raster-contrast":.22,
+      "raster-saturation":-.76,
+      "raster-hue-rotate":8,
+      "raster-brightness-min":.055,
+      "raster-brightness-max":.39,
+      "raster-contrast":.27,
       "raster-opacity":.98
     }
   }]
@@ -70,6 +70,33 @@ const CLUSTERS=[
 ];
 
 const BLOCKED_SEGMENT:Coord[]=[[73.707,19.152],[73.715,19.147],[73.721,19.143]];
+
+// These are intentionally demo planning overlays, not claimed surveyed assets.
+// They give the map the dense evidence-on-the-ground treatment used by the
+// Habitat reference while keeping every synthetic layer visually labelled.
+const GROUND_DATA=[
+  {coord:[73.6834,19.1772] as Coord,tone:"danger",kicker:"SLOPE BAND",value:"34–41°",note:"demo terrain sample"},
+  {coord:[73.6917,19.1700] as Coord,tone:"cyan",kicker:"RUNOFF",value:"3 converging paths",note:"scenario layer"},
+  {coord:[73.6998,19.1582] as Coord,tone:"amber",kicker:"ACCESS",value:"single-road dependency",note:"demo network signal"},
+  {coord:[73.6570,19.1897] as Coord,tone:"cyan",kicker:"SITE A",value:"Water 480",note:"capacity bottleneck"},
+  {coord:[73.7263,19.1328] as Coord,tone:"lime",kicker:"SITE B",value:"Livelihood 780",note:"strongest baseline"},
+  {coord:[73.7190,19.1965] as Coord,tone:"amber",kicker:"SITE C",value:"Health 540",note:"upgrade candidate"}
+];
+
+const REGION_LABELS=[
+  {coord:[73.6886,19.1747] as Coord,tone:"danger",title:"EXTREME-RISK CORE",note:"illustrative exposure region"},
+  {coord:[73.6762,19.1831] as Coord,tone:"amber",title:"TRANSITION BELT",note:"monitor + reversible action"},
+  {coord:[73.6500,19.1812] as Coord,tone:"cyan",title:"A · RECEPTION ENVELOPE",note:"service catchment · demo"},
+  {coord:[73.7327,19.1420] as Coord,tone:"lime",title:"B · READY CORRIDOR",note:"highest baseline viability"},
+  {coord:[73.7204,19.1868] as Coord,tone:"cyan",title:"C · UPGRADE ZONE",note:"safer terrain · service gap"}
+];
+
+const SLOPE_TRANSECTS:Coord[][]=[
+  [[73.674,19.181],[73.704,19.168]],
+  [[73.676,19.174],[73.701,19.160]],
+  [[73.679,19.168],[73.698,19.154]],
+  [[73.681,19.184],[73.694,19.148]]
+];
 
 function featureCollection(features:any[]){return {type:"FeatureCollection",features} as any;}
 function lineFeature(coords:Coord[],props:Record<string,unknown>={}){return {type:"Feature",properties:props,geometry:{type:"LineString",coordinates:coords}} as any;}
@@ -142,10 +169,12 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
   const markers=useRef<MLMarker[]>([]);
   const villageMarker=useRef<MLMarker|null>(null);
   const clusterMarkers=useRef<MLMarker[]>([]);
+  const groundMarkers=useRef<MLMarker[]>([]);
+  const regionMarkers=useRef<MLMarker[]>([]);
   const [ready,setReady]=useState(false);
   const [baseError,setBaseError]=useState<string|null>(null);
   const [terrainStatus,setTerrainStatus]=useState<"loading"|"ready"|"unavailable">("loading");
-  const [layers,setLayers]=useState<LayerState>({risk:true,flow:true,routes:true,clusters:true,terrain:true});
+  const [layers,setLayers]=useState<LayerState>({risk:true,flow:true,routes:true,clusters:true,terrain:true,ground:true});
 
   const routeData=useMemo(()=>featureCollection(Object.entries(ROUTES).map(([id,coords])=>lineFeature(coords,{id,blocked:roadFail&&id==="B"?1:0}))),[roadFail]);
 
@@ -191,12 +220,50 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
 
           try{
             map.addSource("analysis-radius",{type:"geojson",data:polygonFeature(circlePolygon(MALIN,3.2))} as any);
-            map.addLayer({id:"analysisRadiusFill",type:"fill",source:"analysis-radius",paint:{"fill-color":"#7fd8c0","fill-opacity":.025}} as any);
-            map.addLayer({id:"analysisRadiusLine",type:"line",source:"analysis-radius",paint:{"line-color":"#8edac7","line-opacity":.34,"line-width":1.4,"line-dasharray":[4,4]}} as any);
+            map.addLayer({id:"analysisRadiusFill",type:"fill",source:"analysis-radius",paint:{"fill-color":"#7fd8c0","fill-opacity":.018}} as any);
+            map.addLayer({id:"analysisRadiusLine",type:"line",source:"analysis-radius",paint:{"line-color":"#9de0cd","line-opacity":.47,"line-width":1.55,"line-dasharray":[2,3]}} as any);
+
+            // Habitat-style nested dotted planning regions: subtle fills, explicit
+            // boundaries and multiple evidence bands on the actual terrain.
+            map.addSource("planning-regions",{type:"geojson",data:featureCollection([
+              polygonFeature(scalePolygon(cautionZone,1.42),{kind:"study",name:"Study envelope"}),
+              polygonFeature(scalePolygon(cautionZone,1.15),{kind:"watch",name:"Monitoring belt"}),
+              polygonFeature(scalePolygon(redZone,1.28),{kind:"transition",name:"Transition belt"}),
+              polygonFeature(scalePolygon(redZone,.72),{kind:"core",name:"Extreme-risk core"})
+            ])} as any);
+            map.addLayer({id:"planningRegionFill",type:"fill",source:"planning-regions",paint:{
+              "fill-color":["match",["get","kind"],"study","#79cbb4","watch","#9ec87f","transition","#e8b767","#ff6c69"],
+              "fill-opacity":["match",["get","kind"],"study",.012,"watch",.017,"transition",.022,.045]
+            }} as any);
+            map.addLayer({id:"planningRegionDots",type:"line",source:"planning-regions",paint:{
+              "line-color":["match",["get","kind"],"study","#80cbb6","watch","#b6d28c","transition","#efbd72","#ff7774"],
+              "line-width":["match",["get","kind"],"study",1.1,"watch",1.25,"transition",1.5,1.8],
+              "line-opacity":["match",["get","kind"],"study",.25,"watch",.34,"transition",.48,.74],
+              "line-dasharray":[1.2,2.4]
+            }} as any);
+
+            // Dotted service / reception envelopes around the three candidate
+            // locations. These are explicitly demo catchments, not surveyed wards.
+            map.addSource("service-envelopes",{type:"geojson",data:featureCollection([
+              polygonFeature(circlePolygon([73.6500,19.1870],.72),{id:"A",kind:"service"}),
+              polygonFeature(circlePolygon([73.7300,19.1360],.88),{id:"B",kind:"service"}),
+              polygonFeature(circlePolygon([73.7220,19.1920],.78),{id:"C",kind:"service"})
+            ])} as any);
+            map.addLayer({id:"serviceEnvelopeFill",type:"fill",source:"service-envelopes",paint:{"fill-color":"#66d8be","fill-opacity":.025}} as any);
+            map.addLayer({id:"serviceEnvelopeDots",type:"line",source:"service-envelopes",paint:{"line-color":"#75d9c0","line-opacity":.5,"line-width":1.45,"line-dasharray":[1,2]}} as any);
+            map.addLayer({id:"serviceEnvelopeSelected",type:"line",source:"service-envelopes",filter:["==",["get","id"],selected],paint:{"line-color":"#c6ff91","line-opacity":.92,"line-width":2.5,"line-dasharray":[1.3,1.7]}} as any);
+
+            map.addSource("slope-transects",{type:"geojson",data:featureCollection(SLOPE_TRANSECTS.map((x,i)=>lineFeature(x,{i})))} as any);
+            map.addLayer({id:"slopeTransectsGlow",type:"line",source:"slope-transects",paint:{"line-color":"#d8eadf","line-width":5,"line-opacity":.035,"line-blur":3}} as any);
+            map.addLayer({id:"slopeTransects",type:"line",source:"slope-transects",paint:{"line-color":"#c5ddd4","line-width":1,"line-opacity":.28,"line-dasharray":[.8,3.2]}} as any);
+
+            map.addSource("ground-samples",{type:"geojson",data:featureCollection(GROUND_DATA.map((g,i)=>pointFeature(g.coord,{i,tone:g.tone})))} as any);
+            map.addLayer({id:"groundSampleHalo",type:"circle",source:"ground-samples",paint:{"circle-radius":10,"circle-color":"#b6e6d7","circle-opacity":.035,"circle-stroke-color":"#92cbb9","circle-stroke-width":1,"circle-stroke-opacity":.24}} as any);
+            map.addLayer({id:"groundSampleDot",type:"circle",source:"ground-samples",paint:{"circle-radius":2.7,"circle-color":"#d9f4eb","circle-opacity":.85}} as any);
 
             map.addSource("caution",{type:"geojson",data:polygonFeature(cautionZone)} as any);
-            map.addLayer({id:"cautionFill",type:"fill",source:"caution",paint:{"fill-color":"#f1ba69","fill-opacity":.09}} as any);
-            map.addLayer({id:"cautionLine",type:"line",source:"caution",paint:{"line-color":"#f1ba69","line-opacity":.62,"line-width":1.7,"line-dasharray":[3,2]}} as any);
+            map.addLayer({id:"cautionFill",type:"fill",source:"caution",paint:{"fill-color":"#f1ba69","fill-opacity":.075}} as any);
+            map.addLayer({id:"cautionLine",type:"line",source:"caution",paint:{"line-color":"#f1ba69","line-opacity":.68,"line-width":1.8,"line-dasharray":[2,2.5]}} as any);
 
             map.addSource("risk-contours",{type:"geojson",data:featureCollection([
               polygonFeature(scalePolygon(redZone,1.18),{level:1}),
@@ -206,20 +273,21 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
             map.addLayer({id:"riskContours",type:"line",source:"risk-contours",paint:{
               "line-color":["match",["get","level"],1,"#dca866",2,"#ff7d72","#ff565d"],
               "line-width":["match",["get","level"],1,1.3,2,2.0,2.8],
-              "line-opacity":["match",["get","level"],1,.34,2,.58,.9]
+              "line-opacity":["match",["get","level"],1,.34,2,.58,.9],
+              "line-dasharray":[1.4,2.2]
             }} as any);
 
             map.addSource("redzone",{type:"geojson",data:polygonFeature(redZone)} as any);
             map.addLayer({id:"redGlow",type:"fill",source:"redzone",paint:{"fill-color":"#ff6667","fill-opacity":.10}} as any);
-            map.addLayer({id:"redFill",type:"fill",source:"redzone",paint:{"fill-color":"#ff6667","fill-opacity":.21,"fill-outline-color":"#ff8b87"}} as any);
-            map.addLayer({id:"redLine",type:"line",source:"redzone",paint:{"line-color":"#ff7774","line-opacity":.98,"line-width":2.8}} as any);
+            map.addLayer({id:"redFill",type:"fill",source:"redzone",paint:{"fill-color":"#ff6667","fill-opacity":.19,"fill-outline-color":"#ff8b87"}} as any);
+            map.addLayer({id:"redLine",type:"line",source:"redzone",paint:{"line-color":"#ff7774","line-opacity":.98,"line-width":2.7,"line-dasharray":[2,1.25]}} as any);
 
             map.addSource("runoff-lines",{type:"geojson",data:featureCollection(RUNOFF.map((r,i)=>lineFeature(r,{id:i})))} as any);
             map.addLayer({id:"runoffGlow",type:"line",source:"runoff-lines",paint:{"line-color":"#5ee1ff","line-width":9,"line-opacity":.09,"line-blur":6}} as any);
             map.addLayer({id:"runoffLine",type:"line",source:"runoff-lines",paint:{"line-color":"#71dfff","line-width":2.0,"line-opacity":.52,"line-dasharray":[1.5,2.5]}} as any);
 
             map.addSource("routes",{type:"geojson",data:routeData} as any);
-            map.addLayer({id:"routeBase",type:"line",source:"routes",paint:{"line-color":"#97afa7","line-width":2.5,"line-opacity":.26,"line-dasharray":[2,2]}} as any);
+            map.addLayer({id:"routeBase",type:"line",source:"routes",paint:{"line-color":"#97afa7","line-width":2.5,"line-opacity":.28,"line-dasharray":[2,2]}} as any);
             map.addLayer({id:"routeSelected",type:"line",source:"routes",filter:["==",["get","id"],selected],paint:{"line-color":"#6be0c3","line-width":6.4,"line-opacity":.35,"line-blur":2}} as any);
             map.addLayer({id:"routeSelectedCore",type:"line",source:"routes",filter:["==",["get","id"],selected],paint:{"line-color":"#d9fff5","line-width":1.8,"line-opacity":.92}} as any);
             map.addLayer({id:"routeBlocked",type:"line",source:"routes",filter:["==",["get","blocked"],1],paint:{"line-color":"#ff8b68","line-width":7,"line-opacity":.92,"line-dasharray":[1,1]}} as any);
@@ -256,6 +324,20 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
               clusterMarkers.current.push(new ml.Marker({element:el,anchor:"center"}).setLngLat(c.coord).addTo(map!));
             });
 
+            GROUND_DATA.forEach(g=>{
+              const el=document.createElement("div");
+              el.className=`groundDataMarker ${g.tone}`;
+              el.innerHTML=`<i></i><span><small>${g.kicker}</small><b>${g.value}</b><em>${g.note}</em></span>`;
+              groundMarkers.current.push(new ml.Marker({element:el,anchor:"left"}).setLngLat(g.coord).addTo(map!));
+            });
+
+            REGION_LABELS.forEach(r=>{
+              const el=document.createElement("div");
+              el.className=`regionTagMarker ${r.tone}`;
+              el.innerHTML=`<span>${r.title}</span><small>${r.note}</small>`;
+              regionMarkers.current.push(new ml.Marker({element:el,anchor:"center"}).setLngLat(r.coord).addTo(map!));
+            });
+
             setReady(true);
             setBaseError(null);
           }catch(e){console.error("[SafeShift overlays]",e);setReady(true);}
@@ -274,8 +356,12 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
       if(startupTimer)window.clearTimeout(startupTimer);
       markers.current.forEach(m=>m.remove());
       clusterMarkers.current.forEach(m=>m.remove());
+      groundMarkers.current.forEach(m=>m.remove());
+      regionMarkers.current.forEach(m=>m.remove());
       markers.current=[];
       clusterMarkers.current=[];
+      groundMarkers.current=[];
+      regionMarkers.current=[];
       villageMarker.current?.remove();
       villageMarker.current=null;
       map?.remove();
@@ -290,6 +376,7 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
     const src=map.getSource("routes") as any;src?.setData(routeData);
     if(map.getLayer("routeSelected"))map.setFilter("routeSelected",["==",["get","id"],selected] as any);
     if(map.getLayer("routeSelectedCore"))map.setFilter("routeSelectedCore",["==",["get","id"],selected] as any);
+    if(map.getLayer("serviceEnvelopeSelected"))map.setFilter("serviceEnvelopeSelected",["==",["get","id"],selected] as any);
     const blocked=map.getSource("blocked-road") as any;
     blocked?.setData(roadFail?featureCollection([lineFeature(BLOCKED_SEGMENT,{blocked:1})]):featureCollection([]));
   },[ready,routeData,selected,roadFail]);
@@ -327,9 +414,16 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
       polygonFeature(expandedRed,{level:2}),
       polygonFeature(scalePolygon(expandedRed,.78),{level:3})
     ]));
+    (map.getSource("planning-regions") as any)?.setData(featureCollection([
+      polygonFeature(scalePolygon(cautionZone,1.42+.01*pulse),{kind:"study",name:"Study envelope"}),
+      polygonFeature(scalePolygon(cautionZone,1.15+.012*pulse),{kind:"watch",name:"Monitoring belt"}),
+      polygonFeature(scalePolygon(expandedRed,1.28),{kind:"transition",name:"Transition belt"}),
+      polygonFeature(scalePolygon(expandedRed,.72),{kind:"core",name:"Extreme-risk core"})
+    ]));
 
-    if(map.getLayer("redFill"))map.setPaintProperty("redFill","fill-opacity",.16+.17*(rain/40)+.07*pulse);
-    if(map.getLayer("redLine"))map.setPaintProperty("redLine","line-width",2.4+2.2*pulse);
+    if(map.getLayer("redFill"))map.setPaintProperty("redFill","fill-opacity",.15+.17*(rain/40)+.065*pulse);
+    if(map.getLayer("redLine"))map.setPaintProperty("redLine","line-width",2.3+2.0*pulse);
+    if(map.getLayer("planningRegionDots"))map.setPaintProperty("planningRegionDots","line-opacity",.3+.22*pulse);
     if(map.getLayer("runoffLine"))map.setPaintProperty("runoffLine","line-opacity",.22+.62*(rain/40));
 
     const runoffPoints=RUNOFF.flatMap((path,i)=>{
@@ -368,7 +462,10 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
     ["redGlow","redFill","redLine","riskContours","cautionFill","cautionLine"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",visibility(layers.risk)));
     ["runoffGlow","runoffLine","runoffDotsGlow","runoffDots"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",visibility(layers.flow)));
     ["routeBase","routeSelected","routeSelectedCore","routeBlocked","routeProgressGlow","routeProgress","convoyGlow","convoyDots","blockedRoadLine","blockedRoadCore"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",visibility(layers.routes)));
+    ["analysisRadiusFill","analysisRadiusLine","planningRegionFill","planningRegionDots","serviceEnvelopeFill","serviceEnvelopeDots","serviceEnvelopeSelected","slopeTransectsGlow","slopeTransects","groundSampleHalo","groundSampleDot"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",visibility(layers.ground)));
     clusterMarkers.current.forEach(m=>m.getElement().style.display=layers.clusters?"flex":"none");
+    groundMarkers.current.forEach(m=>m.getElement().style.display=layers.ground?"flex":"none");
+    regionMarkers.current.forEach(m=>m.getElement().style.display=layers.ground?"flex":"none");
     if(map.getSource("terrain-dem")){
       try{map.setTerrain(layers.terrain?{source:"terrain-dem",exaggeration:1.58}:null)}catch{}
     }
@@ -385,6 +482,7 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
 
     {ready&&<div className="mapLayerDock" aria-label="Map layers">
       <div className="mapLayerDockTitle"><Layers3/><span>Map layers</span></div>
+      <button className={layers.ground?"active":""} onClick={()=>setLayers(v=>({...v,ground:!v.ground}))}><Layers3/><span>Ground</span></button>
       <button className={layers.risk?"active":""} onClick={()=>setLayers(v=>({...v,risk:!v.risk}))}><MapPinned/><span>Risk</span></button>
       <button className={layers.flow?"active":""} onClick={()=>setLayers(v=>({...v,flow:!v.flow}))}><Waveform/><span>Runoff</span></button>
       <button className={layers.routes?"active":""} onClick={()=>setLayers(v=>({...v,routes:!v.routes}))}><Route/><span>Routes</span></button>
@@ -393,12 +491,14 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
     </div>}
 
     {ready&&<div className="mapLegendPro">
-      <span><i className="lgRadius"/>analysis radius</span>
+      <span><i className="lgRegion"/>planning regions</span>
+      <span><i className="lgRadius"/>analysis boundary</span>
+      <span><i className="lgGround"/>ground evidence</span>
       <span><i className="lgRisk"/>dynamic risk</span>
       <span><i className="lgFlow"/>runoff flow</span>
       <span><i className="lgRoute"/>relocation progress</span>
       {roadFail&&<span><i className="lgBlocked"/>road failure</span>}
-      <small>Household markers and relocation corridors are schematic planning layers; terrain/basemap are geographic context.</small>
+      <small>Dotted regions, service envelopes, household markers and ground samples are illustrative planning overlays; basemap and terrain provide geographic context.</small>
     </div>}
   </div>;
 }
