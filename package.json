@@ -1,0 +1,24 @@
+{
+  "name": "safeshift-sih26191-demo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack -p 8765",
+    "build": "next build --webpack",
+    "start": "next start -p 8765",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "1.41.0",
+    "maplibre-gl": "6.7.0",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.9.0"
+  }
+}
