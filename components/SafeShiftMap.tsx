@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useRef,useState} from "react";
 import type {Map as MLMap,Marker as MLMarker} from "maplibre-gl";
-import {Layers3,MapPinned,Mountain,Route,Waveform} from "lucide-react";
+import {Activity as Waveform,Layers3,MapPinned,Mountain,Route} from "lucide-react";
 import {MALIN,cautionZone,redZone,type Site} from "../lib/data";
 
 type RankedSite=Site&{score:number;regret:number;future:number};
@@ -337,7 +337,6 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
               el.innerHTML=`<span>${r.title}</span><small>${r.note}</small>`;
               regionMarkers.current.push(new ml.Marker({element:el,anchor:"center"}).setLngLat(r.coord).addTo(map!));
             });
-
             setReady(true);
             setBaseError(null);
           }catch(e){console.error("[SafeShift overlays]",e);setReady(true);}
