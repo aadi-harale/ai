@@ -1,13 +1,14 @@
 "use client";
 
 import {useEffect,useMemo,useRef,useState} from "react";
-import type {Map as MLMap,Marker as MLMarker} from "maplibre-gl";
-import {Activity as Waveform,Layers3,MapPinned,Mountain,Route} from "lucide-react";
-import {MALIN,cautionZone,redZone,type Site} from "../lib/data";
+import type {Map as MLMap} from "maplibre-gl";
+import {Activity,Layers3,MapPinned,Mountain,Route} from "lucide-react";
+import {MALIN,bottleneck,cautionZone,functionalCapacity,redZone,type Site} from "../lib/data";
 
 type RankedSite=Site&{score:number;regret:number;future:number};
 type Coord=[number,number];
-type LayerState={risk:boolean;flow:boolean;routes:boolean;clusters:boolean;terrain:boolean;ground:boolean};
+type LayerState={risk:boolean;flow:boolean;routes:boolean;clusters:boolean;terrain:boolean;sites:boolean};
+type Probe={lng:number;lat:number;elevation:number|null}|null;
 
 type Props={
   sites:RankedSite[];
@@ -19,7 +20,10 @@ type Props={
   playing:boolean;
 };
 
-const BASE_STYLE:any={
+const OPENFREE_STYLE="https://tiles.openfreemap.org/styles/dark";
+const TERRAIN_TILEJSON="https://tiles.mapterhorn.com/tilejson.json";
+
+const FALLBACK_STYLE:any={
   version:8,
   sources:{
     osm:{
@@ -34,20 +38,14 @@ const BASE_STYLE:any={
       attribution:"© OpenStreetMap contributors"
     }
   },
-  layers:[{
-    id:"osm",type:"raster",source:"osm",
-    paint:{
-      "raster-saturation":-.76,
-      "raster-hue-rotate":8,
-      "raster-brightness-min":.055,
-      "raster-brightness-max":.39,
-      "raster-contrast":.27,
-      "raster-opacity":.98
-    }
-  }]
+  layers:[{id:"osm",type:"raster",source:"osm",paint:{
+    "raster-saturation":-.72,
+    "raster-hue-rotate":15,
+    "raster-brightness-min":.035,
+    "raster-brightness-max":.31,
+    "raster-contrast":.32
+  }}]
 };
-
-const TERRAIN_TILES=["https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"];
 
 const ROUTES:Record<string,Coord[]>={
   A:[MALIN,[73.681,19.169],[73.670,19.179],[73.660,19.184],[73.6500,19.1870]],
@@ -56,56 +54,42 @@ const ROUTES:Record<string,Coord[]>={
 };
 
 const RUNOFF:Coord[][]=[
-  [[73.676,19.187],[73.681,19.178],[73.685,19.169],MALIN,[73.692,19.151]],
-  [[73.687,19.190],[73.689,19.180],[73.691,19.171],MALIN,[73.697,19.151]],
-  [[73.699,19.184],[73.697,19.176],[73.694,19.168],MALIN,[73.687,19.149]]
+  [[73.671,19.194],[73.678,19.183],[73.684,19.171],MALIN,[73.693,19.147]],
+  [[73.684,19.197],[73.688,19.183],[73.690,19.173],MALIN,[73.699,19.146]],
+  [[73.700,19.194],[73.698,19.181],[73.695,19.171],MALIN,[73.687,19.145]],
+  [[73.709,19.184],[73.704,19.175],[73.698,19.166],[73.693,19.157],[73.689,19.149]]
 ];
 
-const CLUSTERS=[
-  {name:"Upper-slope",homes:58,risk:96,coord:[73.6857,19.1699] as Coord},
-  {name:"Central",homes:80,risk:88,coord:[73.6902,19.1632] as Coord},
-  {name:"Lower valley",homes:103,risk:62,coord:[73.6938,19.1569] as Coord},
-  {name:"Agricultural",homes:121,risk:38,coord:[73.6797,19.1588] as Coord},
-  {name:"Peripheral",homes:129,risk:24,coord:[73.6784,19.1718] as Coord}
+const SCENARIO_CLUSTERS=[
+  {coord:[73.646,19.194] as Coord,count:11,band:"watch"},
+  {coord:[73.665,19.197] as Coord,count:42,band:"watch"},
+  {coord:[73.705,19.198] as Coord,count:5,band:"low"},
+  {coord:[73.722,19.180] as Coord,count:4,band:"low"},
+  {coord:[73.734,19.163] as Coord,count:7,band:"watch"},
+  {coord:[73.718,19.145] as Coord,count:3,band:"low"},
+  {coord:[73.698,19.137] as Coord,count:9,band:"watch"},
+  {coord:[73.673,19.139] as Coord,count:49,band:"watch"},
+  {coord:[73.651,19.149] as Coord,count:2,band:"low"},
+  {coord:[73.658,19.164] as Coord,count:12,band:"watch"},
+  {coord:[73.686,19.167] as Coord,count:148,band:"critical"},
+  {coord:[73.690,19.180] as Coord,count:23,band:"critical"},
+  {coord:[73.704,19.165] as Coord,count:6,band:"watch"},
+  {coord:[73.678,19.188] as Coord,count:5,band:"watch"},
+  {coord:[73.711,19.187] as Coord,count:2,band:"low"},
+  {coord:[73.681,19.149] as Coord,count:25,band:"watch"},
+  {coord:[73.707,19.151] as Coord,count:4,band:"low"}
 ];
 
 const BLOCKED_SEGMENT:Coord[]=[[73.707,19.152],[73.715,19.147],[73.721,19.143]];
 
-// These are intentionally demo planning overlays, not claimed surveyed assets.
-// They give the map the dense evidence-on-the-ground treatment used by the
-// Habitat reference while keeping every synthetic layer visually labelled.
-const GROUND_DATA=[
-  {coord:[73.6834,19.1772] as Coord,tone:"danger",kicker:"SLOPE BAND",value:"34–41°",note:"demo terrain sample"},
-  {coord:[73.6917,19.1700] as Coord,tone:"cyan",kicker:"RUNOFF",value:"3 converging paths",note:"scenario layer"},
-  {coord:[73.6998,19.1582] as Coord,tone:"amber",kicker:"ACCESS",value:"single-road dependency",note:"demo network signal"},
-  {coord:[73.6570,19.1897] as Coord,tone:"cyan",kicker:"SITE A",value:"Water 480",note:"capacity bottleneck"},
-  {coord:[73.7263,19.1328] as Coord,tone:"lime",kicker:"SITE B",value:"Livelihood 780",note:"strongest baseline"},
-  {coord:[73.7190,19.1965] as Coord,tone:"amber",kicker:"SITE C",value:"Health 540",note:"upgrade candidate"}
-];
-
-const REGION_LABELS=[
-  {coord:[73.6886,19.1747] as Coord,tone:"danger",title:"EXTREME-RISK CORE",note:"illustrative exposure region"},
-  {coord:[73.6762,19.1831] as Coord,tone:"amber",title:"TRANSITION BELT",note:"monitor + reversible action"},
-  {coord:[73.6500,19.1812] as Coord,tone:"cyan",title:"A · RECEPTION ENVELOPE",note:"service catchment · demo"},
-  {coord:[73.7327,19.1420] as Coord,tone:"lime",title:"B · READY CORRIDOR",note:"highest baseline viability"},
-  {coord:[73.7204,19.1868] as Coord,tone:"cyan",title:"C · UPGRADE ZONE",note:"safer terrain · service gap"}
-];
-
-const SLOPE_TRANSECTS:Coord[][]=[
-  [[73.674,19.181],[73.704,19.168]],
-  [[73.676,19.174],[73.701,19.160]],
-  [[73.679,19.168],[73.698,19.154]],
-  [[73.681,19.184],[73.694,19.148]]
-];
-
-function featureCollection(features:any[]){return {type:"FeatureCollection",features} as any;}
-function lineFeature(coords:Coord[],props:Record<string,unknown>={}){return {type:"Feature",properties:props,geometry:{type:"LineString",coordinates:coords}} as any;}
-function pointFeature(coord:Coord,props:Record<string,unknown>={}){return {type:"Feature",properties:props,geometry:{type:"Point",coordinates:coord}} as any;}
-function polygonFeature(coords:Coord[],props:Record<string,unknown>={}){return {type:"Feature",properties:props,geometry:{type:"Polygon",coordinates:[coords]}} as any;}
+function fc(features:any[]){return {type:"FeatureCollection",features} as any;}
+function point(coord:Coord,properties:Record<string,unknown>={}){return {type:"Feature",properties,geometry:{type:"Point",coordinates:coord}} as any;}
+function line(coords:Coord[],properties:Record<string,unknown>={}){return {type:"Feature",properties,geometry:{type:"LineString",coordinates:coords}} as any;}
+function polygon(coords:Coord[],properties:Record<string,unknown>={}){return {type:"Feature",properties,geometry:{type:"Polygon",coordinates:[coords]}} as any;}
 
 function centroid(coords:Coord[]):Coord{
   const pts=coords.slice(0,-1);
-  const sum=pts.reduce((a,p)=>[a[0]+p[0],a[1]+p[1]] as Coord,[0,0]);
+  const sum=pts.reduce((acc,p)=>[acc[0]+p[0],acc[1]+p[1]] as Coord,[0,0]);
   return [sum[0]/pts.length,sum[1]/pts.length];
 }
 
@@ -114,74 +98,106 @@ function scalePolygon(coords:Coord[],factor:number):Coord[]{
   return coords.map(([x,y])=>[c[0]+(x-c[0])*factor,c[1]+(y-c[1])*factor]);
 }
 
-function circlePolygon(center:Coord,radiusKm:number,points=72):Coord[]{
+function circlePolygon(center:Coord,radiusKm:number,steps=96):Coord[]{
   const out:Coord[]=[];
-  const latRad=center[1]*Math.PI/180;
-  for(let i=0;i<=points;i++){
-    const a=(i/points)*Math.PI*2;
-    const dy=(radiusKm/111.32)*Math.sin(a);
-    const dx=(radiusKm/(111.32*Math.cos(latRad)))*Math.cos(a);
-    out.push([center[0]+dx,center[1]+dy]);
+  const cos=Math.cos(center[1]*Math.PI/180);
+  for(let i=0;i<=steps;i++){
+    const a=i/steps*Math.PI*2;
+    out.push([
+      center[0]+Math.cos(a)*radiusKm/(111.32*cos),
+      center[1]+Math.sin(a)*radiusKm/111.32
+    ]);
   }
   return out;
 }
 
-function pointAlong(line:Coord[],progress:number):Coord{
+function pointAlong(coords:Coord[],progress:number):Coord{
   const p=Math.max(0,Math.min(.9999,progress));
-  const lengths:number[]=[];let total=0;
-  for(let i=0;i<line.length-1;i++){
-    const dx=line[i+1][0]-line[i][0],dy=line[i+1][1]-line[i][1];
-    const len=Math.sqrt(dx*dx+dy*dy);lengths.push(len);total+=len;
+  const lengths:number[]=[];
+  let total=0;
+  for(let i=0;i<coords.length-1;i++){
+    const dx=coords[i+1][0]-coords[i][0];
+    const dy=coords[i+1][1]-coords[i][1];
+    const len=Math.sqrt(dx*dx+dy*dy);
+    lengths.push(len);total+=len;
   }
   let target=total*p;
   for(let i=0;i<lengths.length;i++){
     if(target<=lengths[i]){
       const t=lengths[i]===0?0:target/lengths[i];
-      return [line[i][0]+(line[i+1][0]-line[i][0])*t,line[i][1]+(line[i+1][1]-line[i][1])*t];
+      return [coords[i][0]+(coords[i+1][0]-coords[i][0])*t,coords[i][1]+(coords[i+1][1]-coords[i][1])*t];
     }
     target-=lengths[i];
   }
-  return line[line.length-1];
+  return coords[coords.length-1];
 }
 
-function lineToProgress(line:Coord[],progress:number):Coord[]{
-  const p=Math.max(0,Math.min(1,progress));
-  if(p<=0)return [line[0],line[0]];
-  if(p>=1)return line;
-  const lengths:number[]=[];let total=0;
-  for(let i=0;i<line.length-1;i++){
-    const dx=line[i+1][0]-line[i][0],dy=line[i+1][1]-line[i][1];
-    const len=Math.sqrt(dx*dx+dy*dy);lengths.push(len);total+=len;
+function polishOpenMap(map:any){
+  const style=map.getStyle?.();
+  const styleLayers=style?.layers??[];
+  for(const layer of styleLayers){
+    const id=String(layer.id||"");
+    const key=id.toLowerCase();
+    try{
+      if(layer.type==="background")map.setPaintProperty(id,"background-color","#06100b");
+      if(layer.type==="fill"){
+        if(/water/.test(key))map.setPaintProperty(id,"fill-color","#061a20");
+        else if(/wood|forest/.test(key))map.setPaintProperty(id,"fill-color","#102718");
+        else if(/grass|park|landcover|scrub/.test(key))map.setPaintProperty(id,"fill-color","#172b1a");
+        else if(/building|residential/.test(key))map.setPaintProperty(id,"fill-color","#111a15");
+      }
+      if(layer.type==="line"){
+        if(/road|highway|transport/.test(key)){
+          map.setPaintProperty(id,"line-color",/motorway|trunk|primary/.test(key)?"#8d8c45":"#566155");
+          map.setPaintProperty(id,"line-opacity",.72);
+        }else if(/boundary/.test(key)){
+          map.setPaintProperty(id,"line-color","#a7b0a4");
+          map.setPaintProperty(id,"line-opacity",.48);
+        }else if(/river|waterway/.test(key)){
+          map.setPaintProperty(id,"line-color","#173541");
+        }
+      }
+      if(layer.type==="symbol"){
+        map.setPaintProperty(id,"text-color",/city|town|village|place/.test(key)?"#b5bbb3":"#939c94");
+        map.setPaintProperty(id,"text-halo-color","rgba(4,10,7,.92)");
+        map.setPaintProperty(id,"text-halo-width",1.25);
+      }
+    }catch{}
   }
-  const target=total*p;let walked=0;const out:Coord[]=[line[0]];
-  for(let i=0;i<lengths.length;i++){
-    if(walked+lengths[i]<target){out.push(line[i+1]);walked+=lengths[i];continue;}
-    const t=lengths[i]===0?0:(target-walked)/lengths[i];
-    out.push([line[i][0]+(line[i+1][0]-line[i][0])*t,line[i][1]+(line[i+1][1]-line[i][1])*t]);
-    break;
+}
+
+function safeVisibility(map:any,ids:string[],show:boolean){
+  for(const id of ids){
+    if(map.getLayer?.(id)){
+      try{map.setLayoutProperty(id,"visibility",show?"visible":"none");}catch{}
+    }
   }
-  return out.length>1?out:[line[0],line[0]];
 }
 
 export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simMinute,playing}:Props){
   const node=useRef<HTMLDivElement|null>(null);
   const mapRef=useRef<MLMap|null>(null);
-  const markers=useRef<MLMarker[]>([]);
-  const villageMarker=useRef<MLMarker|null>(null);
-  const clusterMarkers=useRef<MLMarker[]>([]);
-  const groundMarkers=useRef<MLMarker[]>([]);
-  const regionMarkers=useRef<MLMarker[]>([]);
   const [ready,setReady]=useState(false);
   const [baseError,setBaseError]=useState<string|null>(null);
   const [terrainStatus,setTerrainStatus]=useState<"loading"|"ready"|"unavailable">("loading");
-  const [layers,setLayers]=useState<LayerState>({risk:true,flow:true,routes:true,clusters:true,terrain:true,ground:true});
+  const [layers,setLayers]=useState<LayerState>({risk:true,flow:true,routes:true,clusters:true,terrain:true,sites:true});
+  const [probe,setProbe]=useState<Probe>(null);
 
-  const routeData=useMemo(()=>featureCollection(Object.entries(ROUTES).map(([id,coords])=>lineFeature(coords,{id,blocked:roadFail&&id==="B"?1:0}))),[roadFail]);
+  const routeData=useMemo(()=>fc(Object.entries(ROUTES).map(([id,coords])=>line(coords,{id,blocked:roadFail&&id==="B"?1:0}))),[roadFail]);
+  const siteData=useMemo(()=>fc(sites.map(s=>point(s.coord,{
+    id:s.id,
+    label:`${s.id} · ${s.name}`,
+    score:s.score,
+    capacity:functionalCapacity(s),
+    bottleneck:bottleneck(s),
+    selected:s.id===selected?1:0
+  }))),[sites,selected]);
 
   useEffect(()=>{
     let disposed=false;
-    let map:MLMap|undefined;
-    let startupTimer:number|undefined;
+    let map:any;
+    let fallbackTimer:number|undefined;
+    let usingFallback=false;
 
     (async()=>{
       try{
@@ -190,314 +206,286 @@ export default function SafeShiftMap({sites,selected,onSelect,rain,roadFail,simM
 
         map=new ml.Map({
           container:node.current,
-          style:BASE_STYLE,
-          center:MALIN,
-          zoom:12.15,
-          pitch:62,
-          bearing:-18,
-          attributionControl:false,
-          maxPitch:80
+          style:OPENFREE_STYLE,
+          center:[73.690,19.166],
+          zoom:11.35,
+          pitch:54,
+          bearing:-11,
+          antialias:true,
+          maxPitch:78,
+          minZoom:9.5,
+          maxZoom:17.5,
+          attributionControl:false
         });
         mapRef.current=map;
-        map.addControl(new ml.NavigationControl({visualizePitch:true}),"bottom-right");
+        map.addControl(new ml.NavigationControl({visualizePitch:true,showCompass:true,showZoom:true}),"bottom-right");
         map.addControl(new ml.AttributionControl({compact:true}),"bottom-left");
 
-        startupTimer=window.setTimeout(()=>{
-          if(!disposed&&!map?.isStyleLoaded())setBaseError("Basemap initialization is taking unusually long.");
-        },12000);
-
-        map.on("style.load",()=>{
-          if(!map||disposed)return;
-          if(startupTimer)window.clearTimeout(startupTimer);
+        const installLayers=()=>{
+          if(disposed||!map)return;
+          setBaseError(null);
+          polishOpenMap(map);
+          const firstSymbol=(map.getStyle()?.layers??[]).find((l:any)=>l.type==="symbol")?.id;
 
           try{
-            map.addSource("terrain-dem",{type:"raster-dem",tiles:TERRAIN_TILES,encoding:"terrarium",tileSize:512,maxzoom:17,attribution:"© Mapterhorn"} as any);
-            map.addSource("hillshade-dem",{type:"raster-dem",tiles:TERRAIN_TILES,encoding:"terrarium",tileSize:512,maxzoom:17,attribution:"© Mapterhorn"} as any);
-            map.addLayer({id:"hillshade",type:"hillshade",source:"hillshade-dem",paint:{"hillshade-shadow-color":"#06100d","hillshade-highlight-color":"#d8f3e9","hillshade-accent-color":"#2b6652","hillshade-exaggeration":.42}} as any);
-            map.setTerrain({source:"terrain-dem",exaggeration:1.58});
+            if(!map.getSource("terrain-dem"))map.addSource("terrain-dem",{type:"raster-dem",url:TERRAIN_TILEJSON,tileSize:512,maxzoom:17,attribution:"Terrain © Mapterhorn"});
+            if(!map.getSource("hillshade-dem"))map.addSource("hillshade-dem",{type:"raster-dem",url:TERRAIN_TILEJSON,tileSize:512,maxzoom:17,attribution:"Terrain © Mapterhorn"});
+            if(!map.getLayer("ss-hillshade"))map.addLayer({
+              id:"ss-hillshade",type:"hillshade",source:"hillshade-dem",
+              paint:{
+                "hillshade-shadow-color":"#020805",
+                "hillshade-highlight-color":"#6e8a61",
+                "hillshade-accent-color":"#29462f",
+                "hillshade-illumination-direction":318,
+                "hillshade-exaggeration":.56
+              }
+            },firstSymbol);
+            map.setTerrain({source:"terrain-dem",exaggeration:1.28});
             setTerrainStatus("ready");
-          }catch(e){console.warn("[SafeShift terrain]",e);setTerrainStatus("unavailable");}
+          }catch(error){
+            console.warn("[SafeShift terrain]",error);
+            setTerrainStatus("unavailable");
+          }
 
-          try{
-            map.addSource("analysis-radius",{type:"geojson",data:polygonFeature(circlePolygon(MALIN,3.2))} as any);
-            map.addLayer({id:"analysisRadiusFill",type:"fill",source:"analysis-radius",paint:{"fill-color":"#7fd8c0","fill-opacity":.018}} as any);
-            map.addLayer({id:"analysisRadiusLine",type:"line",source:"analysis-radius",paint:{"line-color":"#9de0cd","line-opacity":.47,"line-width":1.55,"line-dasharray":[2,3]}} as any);
+          if(!map.getSource("analysis-radius")){
+            map.addSource("analysis-radius",{type:"geojson",data:polygon(circlePolygon(MALIN,6.2),{kind:"analysis"})});
+            map.addLayer({id:"analysis-fill",type:"fill",source:"analysis-radius",paint:{"fill-color":"#b9d84d","fill-opacity":.017}},firstSymbol);
+            map.addLayer({id:"analysis-ring-glow",type:"line",source:"analysis-radius",paint:{"line-color":"#c8e45b","line-width":7,"line-opacity":.06,"line-blur":4}},firstSymbol);
+            map.addLayer({id:"analysis-ring",type:"line",source:"analysis-radius",paint:{"line-color":"#cae85a","line-width":2.05,"line-opacity":.88,"line-dasharray":[2.4,2.1]}},firstSymbol);
+          }
 
-            // Habitat-style nested dotted planning regions: subtle fills, explicit
-            // boundaries and multiple evidence bands on the actual terrain.
-            map.addSource("planning-regions",{type:"geojson",data:featureCollection([
-              polygonFeature(scalePolygon(cautionZone,1.42),{kind:"study",name:"Study envelope"}),
-              polygonFeature(scalePolygon(cautionZone,1.15),{kind:"watch",name:"Monitoring belt"}),
-              polygonFeature(scalePolygon(redZone,1.28),{kind:"transition",name:"Transition belt"}),
-              polygonFeature(scalePolygon(redZone,.72),{kind:"core",name:"Extreme-risk core"})
-            ])} as any);
-            map.addLayer({id:"planningRegionFill",type:"fill",source:"planning-regions",paint:{
-              "fill-color":["match",["get","kind"],"study","#79cbb4","watch","#9ec87f","transition","#e8b767","#ff6c69"],
-              "fill-opacity":["match",["get","kind"],"study",.012,"watch",.017,"transition",.022,.045]
-            }} as any);
-            map.addLayer({id:"planningRegionDots",type:"line",source:"planning-regions",paint:{
-              "line-color":["match",["get","kind"],"study","#80cbb6","watch","#b6d28c","transition","#efbd72","#ff7774"],
-              "line-width":["match",["get","kind"],"study",1.1,"watch",1.25,"transition",1.5,1.8],
-              "line-opacity":["match",["get","kind"],"study",.25,"watch",.34,"transition",.48,.74],
-              "line-dasharray":[1.2,2.4]
-            }} as any);
+          if(!map.getSource("caution-zone")){
+            map.addSource("caution-zone",{type:"geojson",data:polygon(cautionZone,{kind:"caution"})});
+            map.addLayer({id:"caution-fill",type:"fill",source:"caution-zone",paint:{"fill-color":"#d5b94b","fill-opacity":.055}},firstSymbol);
+            map.addLayer({id:"caution-line",type:"line",source:"caution-zone",paint:{"line-color":"#d8be54","line-width":1.65,"line-opacity":.68,"line-dasharray":[2,2]}},firstSymbol);
+          }
 
-            // Dotted service / reception envelopes around the three candidate
-            // locations. These are explicitly demo catchments, not surveyed wards.
-            map.addSource("service-envelopes",{type:"geojson",data:featureCollection([
-              polygonFeature(circlePolygon([73.6500,19.1870],.72),{id:"A",kind:"service"}),
-              polygonFeature(circlePolygon([73.7300,19.1360],.88),{id:"B",kind:"service"}),
-              polygonFeature(circlePolygon([73.7220,19.1920],.78),{id:"C",kind:"service"})
-            ])} as any);
-            map.addLayer({id:"serviceEnvelopeFill",type:"fill",source:"service-envelopes",paint:{"fill-color":"#66d8be","fill-opacity":.025}} as any);
-            map.addLayer({id:"serviceEnvelopeDots",type:"line",source:"service-envelopes",paint:{"line-color":"#75d9c0","line-opacity":.5,"line-width":1.45,"line-dasharray":[1,2]}} as any);
-            map.addLayer({id:"serviceEnvelopeSelected",type:"line",source:"service-envelopes",filter:["==",["get","id"],selected],paint:{"line-color":"#c6ff91","line-opacity":.92,"line-width":2.5,"line-dasharray":[1.3,1.7]}} as any);
+          if(!map.getSource("risk-zone")){
+            map.addSource("risk-zone",{type:"geojson",data:polygon(redZone,{kind:"extreme"})});
+            map.addLayer({id:"risk-glow",type:"fill",source:"risk-zone",paint:{"fill-color":"#e85d50","fill-opacity":.07}},firstSymbol);
+            map.addLayer({id:"risk-fill",type:"fill",source:"risk-zone",paint:{"fill-color":"#e66455","fill-opacity":.15}},firstSymbol);
+            map.addLayer({id:"risk-line",type:"line",source:"risk-zone",paint:{"line-color":"#ff8067","line-width":2.25,"line-opacity":.92,"line-dasharray":[2,1.6]}},firstSymbol);
+          }
 
-            map.addSource("slope-transects",{type:"geojson",data:featureCollection(SLOPE_TRANSECTS.map((x,i)=>lineFeature(x,{i})))} as any);
-            map.addLayer({id:"slopeTransectsGlow",type:"line",source:"slope-transects",paint:{"line-color":"#d8eadf","line-width":5,"line-opacity":.035,"line-blur":3}} as any);
-            map.addLayer({id:"slopeTransects",type:"line",source:"slope-transects",paint:{"line-color":"#c5ddd4","line-width":1,"line-opacity":.28,"line-dasharray":[.8,3.2]}} as any);
+          if(!map.getSource("runoff")){
+            map.addSource("runoff",{type:"geojson",data:fc(RUNOFF.map((r,i)=>line(r,{i})))});
+            map.addLayer({id:"runoff-glow",type:"line",source:"runoff",paint:{"line-color":"#58d9e9","line-width":8,"line-opacity":.055,"line-blur":5}},firstSymbol);
+            map.addLayer({id:"runoff-lines",type:"line",source:"runoff",paint:{"line-color":"#71d8e0","line-width":1.35,"line-opacity":.48,"line-dasharray":[1,2.6]}},firstSymbol);
+          }
 
-            map.addSource("ground-samples",{type:"geojson",data:featureCollection(GROUND_DATA.map((g,i)=>pointFeature(g.coord,{i,tone:g.tone})))} as any);
-            map.addLayer({id:"groundSampleHalo",type:"circle",source:"ground-samples",paint:{"circle-radius":10,"circle-color":"#b6e6d7","circle-opacity":.035,"circle-stroke-color":"#92cbb9","circle-stroke-width":1,"circle-stroke-opacity":.24}} as any);
-            map.addLayer({id:"groundSampleDot",type:"circle",source:"ground-samples",paint:{"circle-radius":2.7,"circle-color":"#d9f4eb","circle-opacity":.85}} as any);
+          if(!map.getSource("routes")){
+            map.addSource("routes",{type:"geojson",data:routeData});
+            map.addLayer({id:"route-base",type:"line",source:"routes",paint:{"line-color":"#c5cdc0","line-width":2,"line-opacity":.42,"line-dasharray":[2,2]}});
+            map.addLayer({id:"route-selected-glow",type:"line",source:"routes",filter:["==",["get","id"],selected],paint:{"line-color":"#cfe75c","line-width":9,"line-opacity":.10,"line-blur":4}});
+            map.addLayer({id:"route-selected",type:"line",source:"routes",filter:["==",["get","id"],selected],paint:{"line-color":"#d4e868","line-width":2.8,"line-opacity":.96}});
+            map.addLayer({id:"route-blocked",type:"line",source:"routes",filter:["==",["get","blocked"],1],paint:{"line-color":"#ff765e","line-width":7,"line-opacity":.82,"line-dasharray":[1,1]}});
+          }
 
-            map.addSource("caution",{type:"geojson",data:polygonFeature(cautionZone)} as any);
-            map.addLayer({id:"cautionFill",type:"fill",source:"caution",paint:{"fill-color":"#f1ba69","fill-opacity":.075}} as any);
-            map.addLayer({id:"cautionLine",type:"line",source:"caution",paint:{"line-color":"#f1ba69","line-opacity":.68,"line-width":1.8,"line-dasharray":[2,2.5]}} as any);
+          if(!map.getSource("scenario-clusters")){
+            map.addSource("scenario-clusters",{type:"geojson",data:fc(SCENARIO_CLUSTERS.map((c,i)=>point(c.coord,{...c,i})))});
+            map.addLayer({id:"cluster-halo",type:"circle",source:"scenario-clusters",paint:{
+              "circle-radius":["interpolate",["linear"],["get","count"],1,12,25,22,150,39],
+              "circle-color":"#c7dc70",
+              "circle-opacity":.08,
+              "circle-blur":.25
+            }});
+            map.addLayer({id:"cluster-circles",type:"circle",source:"scenario-clusters",paint:{
+              "circle-radius":["interpolate",["linear"],["get","count"],1,7,25,14,150,27],
+              "circle-color":["match",["get","band"],"critical","#bdca67","watch","#9faf59","#75854d"],
+              "circle-opacity":.88,
+              "circle-stroke-color":"#d9e98b",
+              "circle-stroke-opacity":.52,
+              "circle-stroke-width":1.2
+            }});
+            map.addLayer({id:"cluster-counts",type:"symbol",source:"scenario-clusters",layout:{
+              "text-field":["to-string",["get","count"]],
+              "text-size":12,
+              "text-font":["Noto Sans Bold"],
+              "text-allow-overlap":true,
+              "text-ignore-placement":true
+            },paint:{"text-color":"#0d160d","text-halo-color":"rgba(218,232,142,.18)","text-halo-width":.5}});
+          }
 
-            map.addSource("risk-contours",{type:"geojson",data:featureCollection([
-              polygonFeature(scalePolygon(redZone,1.18),{level:1}),
-              polygonFeature(scalePolygon(redZone,1.0),{level:2}),
-              polygonFeature(scalePolygon(redZone,.78),{level:3})
-            ])} as any);
-            map.addLayer({id:"riskContours",type:"line",source:"risk-contours",paint:{
-              "line-color":["match",["get","level"],1,"#dca866",2,"#ff7d72","#ff565d"],
-              "line-width":["match",["get","level"],1,1.3,2,2.0,2.8],
-              "line-opacity":["match",["get","level"],1,.34,2,.58,.9],
-              "line-dasharray":[1.4,2.2]
-            }} as any);
+          if(!map.getSource("sites")){
+            map.addSource("sites",{type:"geojson",data:siteData});
+            map.addLayer({id:"site-halo",type:"circle",source:"sites",paint:{
+              "circle-radius":["case",["==",["get","selected"],1],28,21],
+              "circle-color":["case",["==",["get","selected"],1],"#d6ec68","#5bd4b3"],
+              "circle-opacity":["case",["==",["get","selected"],1],.12,.065],
+              "circle-stroke-color":["case",["==",["get","selected"],1],"#e5f48d","#7bd9c0"],
+              "circle-stroke-width":["case",["==",["get","selected"],1],2.4,1.4]
+            }});
+            map.addLayer({id:"site-core",type:"circle",source:"sites",paint:{
+              "circle-radius":["case",["==",["get","selected"],1],9,7],
+              "circle-color":["case",["==",["get","selected"],1],"#d7e95e","#66cfb2"],
+              "circle-stroke-color":"#07110d",
+              "circle-stroke-width":2
+            }});
+            map.addLayer({id:"site-label",type:"symbol",source:"sites",layout:{
+              "text-field":["concat","SITE ",["get","id"],"  ·  ",["get","label"],"\n",["to-string",["get","capacity"]]," ppl · bottleneck ",["get","bottleneck"]],
+              "text-font":["Noto Sans Bold"],
+              "text-size":11,
+              "text-offset":[0,-2.4],
+              "text-anchor":"bottom",
+              "text-max-width":18,
+              "text-allow-overlap":false
+            },paint:{"text-color":"#e4eee4","text-halo-color":"rgba(3,10,6,.95)","text-halo-width":1.8}});
+          }
 
-            map.addSource("redzone",{type:"geojson",data:polygonFeature(redZone)} as any);
-            map.addLayer({id:"redGlow",type:"fill",source:"redzone",paint:{"fill-color":"#ff6667","fill-opacity":.10}} as any);
-            map.addLayer({id:"redFill",type:"fill",source:"redzone",paint:{"fill-color":"#ff6667","fill-opacity":.19,"fill-outline-color":"#ff8b87"}} as any);
-            map.addLayer({id:"redLine",type:"line",source:"redzone",paint:{"line-color":"#ff7774","line-opacity":.98,"line-width":2.7,"line-dasharray":[2,1.25]}} as any);
+          if(!map.getSource("malin")){
+            map.addSource("malin",{type:"geojson",data:point(MALIN,{name:"MALIN",households:491})});
+            map.addLayer({id:"malin-halo",type:"circle",source:"malin",paint:{"circle-radius":19,"circle-color":"#ff735d","circle-opacity":.11,"circle-stroke-color":"#ff8975","circle-stroke-width":2,"circle-stroke-opacity":.7}});
+            map.addLayer({id:"malin-core",type:"circle",source:"malin",paint:{"circle-radius":6,"circle-color":"#ff7a62","circle-stroke-color":"#2a0c08","circle-stroke-width":2}});
+            map.addLayer({id:"malin-label",type:"symbol",source:"malin",layout:{"text-field":"MALIN · 491 HH","text-font":["Noto Sans Bold"],"text-size":12,"text-offset":[0,2],"text-anchor":"top"},paint:{"text-color":"#fff1e8","text-halo-color":"#120705","text-halo-width":2}});
+          }
 
-            map.addSource("runoff-lines",{type:"geojson",data:featureCollection(RUNOFF.map((r,i)=>lineFeature(r,{id:i})))} as any);
-            map.addLayer({id:"runoffGlow",type:"line",source:"runoff-lines",paint:{"line-color":"#5ee1ff","line-width":9,"line-opacity":.09,"line-blur":6}} as any);
-            map.addLayer({id:"runoffLine",type:"line",source:"runoff-lines",paint:{"line-color":"#71dfff","line-width":2.0,"line-opacity":.52,"line-dasharray":[1.5,2.5]}} as any);
+          if(!map.getSource("motion")){
+            map.addSource("motion",{type:"geojson",data:fc([])});
+            map.addLayer({id:"motion-glow",type:"circle",source:"motion",paint:{
+              "circle-radius":["match",["get","kind"],"convoy",10,7],
+              "circle-color":["match",["get","kind"],"convoy","#d9eb62","#72d9e4"],
+              "circle-opacity":.13,
+              "circle-blur":.6
+            }});
+            map.addLayer({id:"motion-dots",type:"circle",source:"motion",paint:{
+              "circle-radius":["match",["get","kind"],"convoy",4.7,3.4],
+              "circle-color":["match",["get","kind"],"convoy","#ecf7a0","#b9f5f8"],
+              "circle-stroke-color":["match",["get","kind"],"convoy","#8c9b35","#3299a3"],
+              "circle-stroke-width":1
+            }});
+          }
 
-            map.addSource("routes",{type:"geojson",data:routeData} as any);
-            map.addLayer({id:"routeBase",type:"line",source:"routes",paint:{"line-color":"#97afa7","line-width":2.5,"line-opacity":.28,"line-dasharray":[2,2]}} as any);
-            map.addLayer({id:"routeSelected",type:"line",source:"routes",filter:["==",["get","id"],selected],paint:{"line-color":"#6be0c3","line-width":6.4,"line-opacity":.35,"line-blur":2}} as any);
-            map.addLayer({id:"routeSelectedCore",type:"line",source:"routes",filter:["==",["get","id"],selected],paint:{"line-color":"#d9fff5","line-width":1.8,"line-opacity":.92}} as any);
-            map.addLayer({id:"routeBlocked",type:"line",source:"routes",filter:["==",["get","blocked"],1],paint:{"line-color":"#ff8b68","line-width":7,"line-opacity":.92,"line-dasharray":[1,1]}} as any);
+          if(!map.getSource("blocked-segment")){
+            map.addSource("blocked-segment",{type:"geojson",data:fc([])});
+            map.addLayer({id:"blocked-segment-glow",type:"line",source:"blocked-segment",paint:{"line-color":"#ff644f","line-width":11,"line-opacity":.17,"line-blur":3}});
+            map.addLayer({id:"blocked-segment",type:"line",source:"blocked-segment",paint:{"line-color":"#ff8a67","line-width":3,"line-opacity":.95,"line-dasharray":[1,1]}});
+          }
 
-            map.addSource("route-progress",{type:"geojson",data:featureCollection([])} as any);
-            map.addLayer({id:"routeProgressGlow",type:"line",source:"route-progress",paint:{"line-color":"#b9f27c","line-width":11,"line-opacity":.14,"line-blur":5}} as any);
-            map.addLayer({id:"routeProgress",type:"line",source:"route-progress",paint:{"line-color":"#cfff99","line-width":3.5,"line-opacity":.96}} as any);
+          map.on("mouseenter","site-halo",()=>{map.getCanvas().style.cursor="pointer";});
+          map.on("mouseleave","site-halo",()=>{map.getCanvas().style.cursor="";});
+          map.on("click","site-halo",(event:any)=>{
+            const id=String(event.features?.[0]?.properties?.id||"");
+            if(id){
+              onSelect(id);
+              const found=sites.find(s=>s.id===id);
+              if(found)map.easeTo({center:found.coord,zoom:12.8,pitch:58,bearing:-8,duration:900});
+            }
+          });
 
-            map.addSource("site-rings",{type:"geojson",data:featureCollection([])} as any);
-            map.addLayer({id:"siteRing",type:"circle",source:"site-rings",paint:{"circle-radius":["interpolate",["linear"],["get","score"],50,17,100,31],"circle-color":"#65d9bc","circle-opacity":.07,"circle-stroke-color":"#72dec3","circle-stroke-width":1.5,"circle-stroke-opacity":.48}} as any);
-            map.addLayer({id:"selectedHalo",type:"circle",source:"site-rings",filter:["==",["get","selected"],1],paint:{"circle-radius":39,"circle-color":"#b9f27c","circle-opacity":.065,"circle-stroke-color":"#b9f27c","circle-stroke-width":2,"circle-stroke-opacity":.76}} as any);
+          map.on("click",(event:any)=>{
+            try{
+              const elevation=map.queryTerrainElevation?.(event.lngLat,{exaggerated:false});
+              setProbe({lng:event.lngLat.lng,lat:event.lngLat.lat,elevation:typeof elevation==="number"?Math.round(elevation):null});
+            }catch{
+              setProbe({lng:event.lngLat.lng,lat:event.lngLat.lat,elevation:null});
+            }
+          });
 
-            map.addSource("moving-runoff",{type:"geojson",data:featureCollection([])} as any);
-            map.addLayer({id:"runoffDotsGlow",type:"circle",source:"moving-runoff",paint:{"circle-radius":10,"circle-color":"#54dfff","circle-opacity":.12,"circle-blur":.7}} as any);
-            map.addLayer({id:"runoffDots",type:"circle",source:"moving-runoff",paint:{"circle-radius":4.3,"circle-color":"#c2f6ff","circle-opacity":.96,"circle-stroke-color":"#2ebee4","circle-stroke-width":1.1}} as any);
+          setReady(true);
+        };
 
-            map.addSource("convoy",{type:"geojson",data:featureCollection([])} as any);
-            map.addLayer({id:"convoyGlow",type:"circle",source:"convoy",paint:{"circle-radius":11,"circle-color":"#b9f27c","circle-opacity":.15,"circle-blur":.5}} as any);
-            map.addLayer({id:"convoyDots",type:"circle",source:"convoy",paint:{"circle-radius":5.2,"circle-color":"#f0ffd9","circle-stroke-color":"#85bc60","circle-stroke-width":1.4}} as any);
-
-            map.addSource("blocked-road",{type:"geojson",data:featureCollection([])} as any);
-            map.addLayer({id:"blockedRoadLine",type:"line",source:"blocked-road",paint:{"line-color":"#ff795f","line-width":9,"line-opacity":.84,"line-blur":1}} as any);
-            map.addLayer({id:"blockedRoadCore",type:"line",source:"blocked-road",paint:{"line-color":"#ffcf7a","line-width":2.2,"line-opacity":.98,"line-dasharray":[1,1]}} as any);
-
-            const village=document.createElement("div");
-            village.className="malinMarker";
-            village.innerHTML="<i></i><span><b>Malin</b><small>491 households · red-zone origin</small></span>";
-            villageMarker.current=new ml.Marker({element:village,anchor:"center"}).setLngLat(MALIN).addTo(map);
-
-            CLUSTERS.forEach(c=>{
-              const el=document.createElement("div");
-              el.className=`clusterMapMarker ${c.risk>=85?"critical":c.risk>=55?"watch":"safe"}`;
-              el.innerHTML=`<i>${c.homes}</i><span><b>${c.name}</b><small>${c.risk}/100 risk · schematic</small></span>`;
-              clusterMarkers.current.push(new ml.Marker({element:el,anchor:"center"}).setLngLat(c.coord).addTo(map!));
-            });
-
-            GROUND_DATA.forEach(g=>{
-              const el=document.createElement("div");
-              el.className=`groundDataMarker ${g.tone}`;
-              el.innerHTML=`<i></i><span><small>${g.kicker}</small><b>${g.value}</b><em>${g.note}</em></span>`;
-              groundMarkers.current.push(new ml.Marker({element:el,anchor:"left"}).setLngLat(g.coord).addTo(map!));
-            });
-
-            REGION_LABELS.forEach(r=>{
-              const el=document.createElement("div");
-              el.className=`regionTagMarker ${r.tone}`;
-              el.innerHTML=`<span>${r.title}</span><small>${r.note}</small>`;
-              regionMarkers.current.push(new ml.Marker({element:el,anchor:"center"}).setLngLat(r.coord).addTo(map!));
-            });
-            setReady(true);
-            setBaseError(null);
-          }catch(e){console.error("[SafeShift overlays]",e);setReady(true);}
-        });
-
+        map.on("style.load",installLayers);
         map.on("error",(event:any)=>{
           const message=String(event?.error?.message||event||"");
+          if(/mapterhorn|terrain|raster-dem/i.test(message))setTerrainStatus("unavailable");
           console.warn("[SafeShift map]",message);
-          if(/mapterhorn|terrain|raster-dem|webp/i.test(message))setTerrainStatus("unavailable");
         });
-      }catch(e){setBaseError(e instanceof Error?e.message:"Map initialization failed");}
+
+        fallbackTimer=window.setTimeout(()=>{
+          if(disposed||!map||map.isStyleLoaded?.()||usingFallback)return;
+          usingFallback=true;
+          console.warn("[SafeShift map] OpenFreeMap style timed out; switching to resilient OSM fallback");
+          try{map.setStyle(FALLBACK_STYLE);}catch(error){setBaseError(error instanceof Error?error.message:"Basemap unavailable");}
+        },12000);
+      }catch(error){
+        setBaseError(error instanceof Error?error.message:"Map initialization failed");
+      }
     })();
 
     return()=>{
       disposed=true;
-      if(startupTimer)window.clearTimeout(startupTimer);
-      markers.current.forEach(m=>m.remove());
-      clusterMarkers.current.forEach(m=>m.remove());
-      groundMarkers.current.forEach(m=>m.remove());
-      regionMarkers.current.forEach(m=>m.remove());
-      markers.current=[];
-      clusterMarkers.current=[];
-      groundMarkers.current=[];
-      regionMarkers.current=[];
-      villageMarker.current?.remove();
-      villageMarker.current=null;
-      map?.remove();
+      if(fallbackTimer)window.clearTimeout(fallbackTimer);
+      try{map?.remove();}catch{}
       mapRef.current=null;
     };
-  // map is constructed once; live state is synchronized below
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
   useEffect(()=>{
-    const map=mapRef.current;if(!ready||!map)return;
-    const src=map.getSource("routes") as any;src?.setData(routeData);
-    if(map.getLayer("routeSelected"))map.setFilter("routeSelected",["==",["get","id"],selected] as any);
-    if(map.getLayer("routeSelectedCore"))map.setFilter("routeSelectedCore",["==",["get","id"],selected] as any);
-    if(map.getLayer("serviceEnvelopeSelected"))map.setFilter("serviceEnvelopeSelected",["==",["get","id"],selected] as any);
-    const blocked=map.getSource("blocked-road") as any;
-    blocked?.setData(roadFail?featureCollection([lineFeature(BLOCKED_SEGMENT,{blocked:1})]):featureCollection([]));
-  },[ready,routeData,selected,roadFail]);
+    const map:any=mapRef.current;
+    if(!ready||!map)return;
+
+    const riskScale=1+rain*.0065;
+    const riskSource=map.getSource("risk-zone");
+    if(riskSource?.setData)riskSource.setData(polygon(scalePolygon(redZone,riskScale),{kind:"extreme",rain}));
+
+    const routes=map.getSource("routes");
+    if(routes?.setData)routes.setData(routeData);
+    if(map.getLayer("route-selected-glow"))map.setFilter("route-selected-glow",["==",["get","id"],selected]);
+    if(map.getLayer("route-selected"))map.setFilter("route-selected",["==",["get","id"],selected]);
+    if(map.getLayer("route-blocked"))map.setFilter("route-blocked",["==",["get","blocked"],1]);
+
+    const siteSource=map.getSource("sites");
+    if(siteSource?.setData)siteSource.setData(siteData);
+
+    const blocked=map.getSource("blocked-segment");
+    if(blocked?.setData)blocked.setData(roadFail&&selected==="B"?fc([line(BLOCKED_SEGMENT,{blocked:1})]):fc([]));
+  },[ready,rain,roadFail,selected,routeData,siteData]);
 
   useEffect(()=>{
-    if(!ready||!mapRef.current)return;
-    let cancelled=false;
-    (async()=>{
-      const ml=await import("maplibre-gl");
-      if(cancelled||!mapRef.current)return;
-      markers.current.forEach(m=>m.remove());markers.current=[];
-      sites.forEach(s=>{
-        const el=document.createElement("button");
-        el.type="button";el.className=`siteMarker ${selected===s.id?"selected":""}`;
-        el.innerHTML=`<i>${s.id}</i><span><b>${s.name}</b><small>${s.score}/100 · capacity ${Math.min(...Object.values(s.capacity))}</small></span>`;
-        el.onclick=()=>onSelect(s.id);
-        markers.current.push(new ml.Marker({element:el,anchor:"center"}).setLngLat(s.coord).addTo(mapRef.current!));
-      });
-      (mapRef.current.getSource("site-rings") as any)?.setData(featureCollection(sites.map(s=>pointFeature(s.coord,{id:s.id,score:s.score,selected:s.id===selected?1:0}))));
-    })();
-    return()=>{cancelled=true};
-  },[ready,sites,selected,onSelect]);
-
-  useEffect(()=>{
-    const map=mapRef.current;if(!ready||!map)return;
-    const pulse=Math.sin(simMinute*.55)*.5+.5;
-    const expansion=1+(rain/40)*(.03+.06*(simMinute/60))+.014*pulse;
-    const cautionExpansion=1+(rain/40)*.04+.009*pulse;
-    const expandedRed=scalePolygon(redZone,expansion);
-
-    (map.getSource("redzone") as any)?.setData(polygonFeature(expandedRed));
-    (map.getSource("caution") as any)?.setData(polygonFeature(scalePolygon(cautionZone,cautionExpansion)));
-    (map.getSource("risk-contours") as any)?.setData(featureCollection([
-      polygonFeature(scalePolygon(expandedRed,1.2),{level:1}),
-      polygonFeature(expandedRed,{level:2}),
-      polygonFeature(scalePolygon(expandedRed,.78),{level:3})
-    ]));
-    (map.getSource("planning-regions") as any)?.setData(featureCollection([
-      polygonFeature(scalePolygon(cautionZone,1.42+.01*pulse),{kind:"study",name:"Study envelope"}),
-      polygonFeature(scalePolygon(cautionZone,1.15+.012*pulse),{kind:"watch",name:"Monitoring belt"}),
-      polygonFeature(scalePolygon(expandedRed,1.28),{kind:"transition",name:"Transition belt"}),
-      polygonFeature(scalePolygon(expandedRed,.72),{kind:"core",name:"Extreme-risk core"})
-    ]));
-
-    if(map.getLayer("redFill"))map.setPaintProperty("redFill","fill-opacity",.15+.17*(rain/40)+.065*pulse);
-    if(map.getLayer("redLine"))map.setPaintProperty("redLine","line-width",2.3+2.0*pulse);
-    if(map.getLayer("planningRegionDots"))map.setPaintProperty("planningRegionDots","line-opacity",.3+.22*pulse);
-    if(map.getLayer("runoffLine"))map.setPaintProperty("runoffLine","line-opacity",.22+.62*(rain/40));
-
-    const runoffPoints=RUNOFF.flatMap((path,i)=>{
-      const speed=.017+.016*(rain/40);
-      return [0,.22,.44,.66,.82].map((offset,j)=>pointFeature(pointAlong(path,(simMinute*speed+offset+i*.11)%1),{path:i,dot:j}));
-    });
-    (map.getSource("moving-runoff") as any)?.setData(featureCollection(runoffPoints));
-
+    const map:any=mapRef.current;
+    if(!ready||!map)return;
     const route=ROUTES[selected]??ROUTES.B;
-    const raw=Math.max(0,Math.min(1,simMinute/60));
-    const stopped=roadFail&&selected==="B";
-    const lead=stopped?Math.min(raw,.47):raw;
-    const convoy=[0,.055,.11,.165].map((lag,i)=>pointFeature(pointAlong(route,Math.max(0,lead-lag)),{i}));
-    (map.getSource("convoy") as any)?.setData(featureCollection(convoy));
-    (map.getSource("route-progress") as any)?.setData(featureCollection([lineFeature(lineToProgress(route,lead),{progress:lead})]));
-
-    if(playing&&simMinute%15===0){
-      const destination=sites.find(s=>s.id===selected)?.coord;
-      if(destination){
-        const mid:Coord=[(MALIN[0]+destination[0])/2,(MALIN[1]+destination[1])/2];
-        map.easeTo({center:mid,zoom:12.08,pitch:65,bearing:-18+Math.sin(simMinute/9)*6,duration:620});
-      }
-    }
-  },[ready,rain,roadFail,simMinute,playing,selected,sites]);
+    const progress=Math.max(0,Math.min(1,simMinute/60));
+    const moving=[point(pointAlong(route,progress),{kind:"convoy"})];
+    RUNOFF.forEach((r,i)=>{
+      const p=(progress+i*.18)%1;
+      moving.push(point(pointAlong(r,p),{kind:"runoff",i}));
+      moving.push(point(pointAlong(r,(p+.08)%1),{kind:"runoff",i}));
+    });
+    const source=map.getSource("motion");
+    if(source?.setData)source.setData(fc(moving));
+    if(map.getLayer("motion-dots"))map.setPaintProperty("motion-dots","circle-opacity",playing?1:.76);
+  },[ready,selected,simMinute,playing]);
 
   useEffect(()=>{
-    const map=mapRef.current;if(!ready||!map)return;
-    const dest=sites.find(s=>s.id===selected)?.coord;if(!dest)return;
-    const mid:Coord=[(MALIN[0]+dest[0])/2,(MALIN[1]+dest[1])/2];
-    map.easeTo({center:mid,zoom:12.15,pitch:63,bearing:-18,duration:650});
-  },[selected,ready,sites]);
+    const map:any=mapRef.current;
+    if(!ready||!map)return;
+    safeVisibility(map,["risk-glow","risk-fill","risk-line","caution-fill","caution-line"],layers.risk);
+    safeVisibility(map,["runoff-glow","runoff-lines","motion-glow","motion-dots"],layers.flow);
+    safeVisibility(map,["route-base","route-selected-glow","route-selected","route-blocked","blocked-segment-glow","blocked-segment"],layers.routes);
+    safeVisibility(map,["cluster-halo","cluster-circles","cluster-counts"],layers.clusters);
+    safeVisibility(map,["site-halo","site-core","site-label","malin-halo","malin-core","malin-label"],layers.sites);
+    safeVisibility(map,["ss-hillshade"],layers.terrain);
 
-  useEffect(()=>{
-    const map=mapRef.current;if(!ready||!map)return;
-    const visibility=(on:boolean)=>on?"visible":"none";
-    ["redGlow","redFill","redLine","riskContours","cautionFill","cautionLine"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",visibility(layers.risk)));
-    ["runoffGlow","runoffLine","runoffDotsGlow","runoffDots"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",visibility(layers.flow)));
-    ["routeBase","routeSelected","routeSelectedCore","routeBlocked","routeProgressGlow","routeProgress","convoyGlow","convoyDots","blockedRoadLine","blockedRoadCore"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",visibility(layers.routes)));
-    ["analysisRadiusFill","analysisRadiusLine","planningRegionFill","planningRegionDots","serviceEnvelopeFill","serviceEnvelopeDots","serviceEnvelopeSelected","slopeTransectsGlow","slopeTransects","groundSampleHalo","groundSampleDot"].forEach(id=>map.getLayer(id)&&map.setLayoutProperty(id,"visibility",visibility(layers.ground)));
-    clusterMarkers.current.forEach(m=>m.getElement().style.display=layers.clusters?"flex":"none");
-    groundMarkers.current.forEach(m=>m.getElement().style.display=layers.ground?"flex":"none");
-    regionMarkers.current.forEach(m=>m.getElement().style.display=layers.ground?"flex":"none");
-    if(map.getSource("terrain-dem")){
-      try{map.setTerrain(layers.terrain?{source:"terrain-dem",exaggeration:1.58}:null)}catch{}
-    }
-    if(map.getLayer("hillshade"))map.setLayoutProperty("hillshade","visibility",visibility(layers.terrain));
+    try{
+      map.setTerrain(layers.terrain&&map.getSource("terrain-dem")?{source:"terrain-dem",exaggeration:1.28}:null);
+      map.easeTo(layers.terrain?{pitch:54,bearing:-11,duration:650}:{pitch:0,bearing:0,duration:650});
+    }catch{}
   },[ready,layers]);
+
+  const toggle=(key:keyof LayerState)=>setLayers(v=>({...v,[key]:!v[key]}));
 
   return <div className="mapWrap">
     <div ref={node} className="mapNode"/>
 
-    {!ready&&!baseError&&<div className="mapLoading"><span/><b>Loading decision terrain</b><small>Cartographic basemap · 3D elevation · live planning layers</small></div>}
-    {baseError&&<div className="mapFallback"><b>Basemap unavailable</b><span>{baseError}</span><small>The decision simulation remains usable.</small></div>}
+    {!ready&&!baseError&&<div className="mapLoading"><span/><b>Loading high-detail terrain</b><small>OpenFreeMap vectors · Mapterhorn DEM · hillshade · live decision layers</small></div>}
+    {baseError&&<div className="mapFallback"><b>Basemap unavailable</b><span>{baseError}</span><small>The decision model remains usable while the terrain provider recovers.</small></div>}
 
-    {ready&&<div className={`terrainBadge ${terrainStatus==="unavailable"?"warn":""}`}><i/><span>{terrainStatus==="ready"&&layers.terrain?"3D terrain active":"2D terrain mode"}</span></div>}
+    {ready&&<div className={`terrainBadge ${terrainStatus==="unavailable"?"warn":""}`}><i/><span>{terrainStatus==="ready"&&layers.terrain?"3D DEM terrain active":"2D fallback terrain"}</span></div>}
 
     {ready&&<div className="mapLayerDock" aria-label="Map layers">
-      <div className="mapLayerDockTitle"><Layers3/><span>Map layers</span></div>
-      <button className={layers.ground?"active":""} onClick={()=>setLayers(v=>({...v,ground:!v.ground}))}><Layers3/><span>Ground</span></button>
-      <button className={layers.risk?"active":""} onClick={()=>setLayers(v=>({...v,risk:!v.risk}))}><MapPinned/><span>Risk</span></button>
-      <button className={layers.flow?"active":""} onClick={()=>setLayers(v=>({...v,flow:!v.flow}))}><Waveform/><span>Runoff</span></button>
-      <button className={layers.routes?"active":""} onClick={()=>setLayers(v=>({...v,routes:!v.routes}))}><Route/><span>Routes</span></button>
-      <button className={layers.clusters?"active":""} onClick={()=>setLayers(v=>({...v,clusters:!v.clusters}))}><MapPinned/><span>Homes</span></button>
-      <button className={layers.terrain?"active":""} onClick={()=>setLayers(v=>({...v,terrain:!v.terrain}))}><Mountain/><span>3D</span></button>
+      <div className="mapLayerDockTitle"><Layers3/><span>Terrain</span></div>
+      <button className={layers.terrain?"active":""} onClick={()=>toggle("terrain")}><Mountain/><span>3D relief</span></button>
+      <button className={layers.clusters?"active":""} onClick={()=>toggle("clusters")}><Layers3/><span>Clusters</span></button>
+      <button className={layers.risk?"active":""} onClick={()=>toggle("risk")}><MapPinned/><span>Risk</span></button>
+      <button className={layers.routes?"active":""} onClick={()=>toggle("routes")}><Route/><span>Routes</span></button>
+      <button className={layers.flow?"active":""} onClick={()=>toggle("flow")}><Activity/><span>Runoff</span></button>
     </div>}
 
-    {ready&&<div className="mapLegendPro">
-      <span><i className="lgRegion"/>planning regions</span>
-      <span><i className="lgRadius"/>analysis boundary</span>
-      <span><i className="lgGround"/>ground evidence</span>
-      <span><i className="lgRisk"/>dynamic risk</span>
-      <span><i className="lgFlow"/>runoff flow</span>
-      <span><i className="lgRoute"/>relocation progress</span>
-      {roadFail&&<span><i className="lgBlocked"/>road failure</span>}
-      <small>Dotted regions, service envelopes, household markers and ground samples are illustrative planning overlays; basemap and terrain provide geographic context.</small>
+    {ready&&<div style={{position:"absolute",left:14,bottom:44,zIndex:9,minWidth:190,padding:"9px 11px",border:"1px solid rgba(177,210,117,.24)",borderRadius:10,background:"rgba(4,12,8,.88)",backdropFilter:"blur(14px)",boxShadow:"0 12px 28px rgba(0,0,0,.28)",pointerEvents:"none"}}>
+      <div style={{fontSize:9,fontWeight:800,letterSpacing:".09em",color:"#a5bc73"}}>TERRAIN PROBE · DEM</div>
+      {probe?<div style={{marginTop:4,display:"flex",alignItems:"baseline",gap:7}}><b style={{fontSize:17,color:"#eef6df"}}>{probe.elevation===null?"—":`${probe.elevation} m`}</b><span style={{fontSize:9,color:"#849487"}}>{probe.lat.toFixed(4)}, {probe.lng.toFixed(4)}</span></div>:<div style={{marginTop:4,fontSize:10,color:"#8b9b8d"}}>Click terrain to inspect elevation</div>}
+      <div style={{marginTop:3,fontSize:9,color:"#657468"}}>Scenario clusters are illustrative · terrain is streamed elevation data</div>
     </div>}
   </div>;
 }
