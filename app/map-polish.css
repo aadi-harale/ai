@@ -1,0 +1,37 @@
+/* Final SafeShift map polish — Habitat-inspired cartographic control language + readable judge-demo typography */
+
+/* map layer dock */
+.mapLayerDock{position:absolute;z-index:8;right:16px;top:218px;width:118px;padding:10px;border:1px solid #2f4c43;border-radius:12px;background:rgba(7,17,14,.92);backdrop-filter:blur(16px);box-shadow:0 16px 34px rgba(0,0,0,.24);display:grid;gap:6px}
+.mapLayerDockTitle{display:flex;align-items:center;gap:7px;padding:1px 2px 7px;border-bottom:1px solid #233a33;color:#9eb4ac;font-size:10px;font-weight:700}.mapLayerDockTitle svg{width:15px;height:15px;color:#80b4a3}
+.mapLayerDock button{height:34px;border:1px solid transparent;border-radius:8px;background:transparent;color:#829990;display:flex;align-items:center;gap:8px;padding:0 8px;cursor:pointer;font-size:10px;font-weight:650;text-align:left}.mapLayerDock button svg{width:14px;height:14px;flex:none}.mapLayerDock button:hover{background:#0f241d;color:#e7f3ef}.mapLayerDock button.active{border-color:#365c50;background:#10281f;color:#dff8ee}.mapLayerDock button.active svg{color:#9be5cb}
+
+/* schematic household-cluster markers: intentionally labelled schematic in marker text */
+.clusterMapMarker{display:flex;align-items:center;gap:6px;pointer-events:none;filter:drop-shadow(0 7px 16px rgba(0,0,0,.28))}.clusterMapMarker>i{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:#101d19;border:2px solid currentColor;font-style:normal;font-size:9px;font-weight:800}.clusterMapMarker>span{padding:6px 8px;border:1px solid #324a42;border-radius:8px;background:rgba(7,16,14,.91);backdrop-filter:blur(10px);white-space:nowrap}.clusterMapMarker b{display:block;color:#eef7f3;font-size:10px;line-height:1.15}.clusterMapMarker small{display:block;font-size:8px;margin-top:2px;color:#8da39b}.clusterMapMarker.critical{color:#ff7774}.clusterMapMarker.watch{color:#f1ba69}.clusterMapMarker.safe{color:#74dfa4}
+
+/* legend additions */
+.mapLegendPro .lgRadius{background:transparent!important;border-top:2px dashed #90cdbb;height:2px!important}
+
+/* readability pass — stop using micro-copy that only works in screenshots */
+.workspaceHeader>div>div:last-child>b{font-size:15px!important}.workspaceHeader small{font-size:12px!important}.miniBrand b{font-size:14px!important}.outlineButton{font-size:12px!important}
+.evidenceStrip{font-size:11px!important}.evidenceStrip b,.evidenceStrip em{font-size:11px!important}
+.rail button{font-size:11px!important}.rail button svg{width:20px!important;height:20px!important}
+.mapHeadline span{font-size:10px!important}.mapHeadline b{font-size:15px!important}.mapHeadline small{font-size:11px!important}
+.mapDecisionChip b{font-size:12px!important}.mapDecisionChip span{font-size:11px!important}
+.simHud{width:274px!important}.simHud>span{font-size:10px!important}.simHud article span{font-size:10px!important;line-height:1.25}.simHud article b{font-size:18px!important}.simHud footer{font-size:10px!important;line-height:1.45!important}
+.mapLegendPro span{font-size:10px!important}.mapLegendPro small{font-size:9px!important;line-height:1.35}
+.terrainBadge{font-size:10px!important}
+.siteMarker>i{width:30px!important;height:30px!important;font-size:11px!important}.siteMarker b,.malinMarker b{font-size:12px!important}.siteMarker small,.malinMarker small{font-size:10px!important}.siteMarker span,.malinMarker span{padding:8px 10px!important}
+.panelTitle span{font-size:10px!important}.panelTitle b{font-size:17px!important}.decisionHero>span{font-size:10px!important}.decisionHero h2{font-size:31px!important}.decisionHero p,.actionCard p,.dangerCard p{font-size:13px!important}.metric span{font-size:11px!important}.metric b{font-size:15px!important}.actionCard>span,.dangerCard>span{font-size:10px!important}.actionCard>b,.dangerCard>b{font-size:14px!important}
+.cluster b{font-size:13px!important}.cluster small,.cluster p{font-size:11px!important}.cluster strong{font-size:15px!important}
+.siteRow b{font-size:12px!important}.siteRow small{font-size:10px!important}.siteRow strong{font-size:17px!important}.detailHeader span{font-size:10px!important}.detailHeader b{font-size:14px!important}.detailHeader strong{font-size:16px!important}.capacityBars>div>span{font-size:11px!important}.capacityResult span{font-size:10px!important}.capacityResult>b{font-size:20px!important}.capacityResult p{font-size:11px!important}.upgradeCard b{font-size:13px!important}.upgradeCard small,.upgradeCard p{font-size:11px!important}.upgradeCard button{font-size:12px!important;min-height:38px}
+.futureControl label>span,.futureControl .check{font-size:12px!important}.futureTable>div{font-size:12px!important}.cohesionHero p{font-size:12px!important}.simExplanation span{font-size:10px!important}.simExplanation b{font-size:14px!important}.simExplanation p{font-size:11px!important}
+.mapStressBar .simClock span,.mapStressBar .stressControl span{font-size:10px!important}.mapStressBar .simClock b{font-size:15px!important}.mapStressBar .stressControl b{font-size:13px!important}.mapStressBar .roadToggle{font-size:11px!important}
+
+/* subtle movement while preserving reduced-motion preference */
+@keyframes clusterBreath{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes dockIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+.mapLayerDock{animation:dockIn .35s ease-out}.clusterMapMarker.critical>i{animation:clusterBreath 2.2s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.mapLayerDock,.clusterMapMarker.critical>i{animation:none!important}}
+
+@media(max-width:1180px){.mapLayerDock{top:206px;right:12px;width:108px}.mapLayerDock button{font-size:9px;padding:0 6px}.simHud{width:235px!important}}
+@media(max-width:820px){.mapLayerDock{display:none}.clusterMapMarker span{display:none}.clusterMapMarker>i{width:23px;height:23px}.simHud{width:202px!important}.evidenceStrip{font-size:10px!important}.mapHeadline b{font-size:13px!important}.mapHeadline small{font-size:10px!important}}
