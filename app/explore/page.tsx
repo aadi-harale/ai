@@ -111,6 +111,27 @@ export default function Explore(){
             <p>Catastrophic exposure is concentrated in the upper-slope and central clusters. Move those households first instead of displacing the whole village.</p>
             <div className="metricGrid"><Metric label="Extreme-risk homes" value="138"/><Metric label="Village share" value="28%"/><Metric label="Evidence" value="82%"/><Metric label="Confidence" value="High"/></div>
           </div>
+          <section className="strategyCompare" aria-label="Stay versus relocation strategy comparison">
+            <header><span>STAY vs MOVE SIMULATOR</span><b>Why partial wins</b></header>
+            <div className="strategyGrid">
+              <button className="strategyCard" onClick={()=>{setRain(40);setRoadFail(true);setTab("future")}}>
+                <span>OPTION 01</span><b>Stay</b>
+                <dl><div><dt>Displaced</dt><dd>0 homes</dd></div><div><dt>Residual risk</dt><dd>Critical</dd></div><div><dt>Livelihood</dt><dd>100%</dd></div></dl>
+                <small>Lowest disruption, but catastrophic exposure remains concentrated.</small>
+              </button>
+              <button className="strategyCard recommended" onClick={()=>setTab("households")}>
+                <span>RECOMMENDED</span><b>Partial move</b>
+                <dl><div><dt>Displaced</dt><dd>138 homes</dd></div><div><dt>Residual risk</dt><dd>Low</dd></div><div><dt>Livelihood</dt><dd>High</dd></div></dl>
+                <small>Moves the highest-risk clusters while preserving most community and livelihood ties.</small>
+              </button>
+              <button className="strategyCard" onClick={()=>setTab("cohesion")}>
+                <span>OPTION 03</span><b>Full move</b>
+                <dl><div><dt>Displaced</dt><dd>491 homes</dd></div><div><dt>Residual risk</dt><dd>Lowest</dd></div><div><dt>Livelihood</dt><dd>Fragile</dd></div></dl>
+                <small>Reduces hazard exposure most, but maximizes social and livelihood disruption.</small>
+              </button>
+            </div>
+          </section>
+          <button className="decisionNext" onClick={()=>setTab("households")}>Next · inspect the 138 households driving the decision →</button>
           <div className="simExplanation"><span>WHAT THE MAP IS DOING</span><b>Risk, runoff and evacuation movement change with time.</b><p>The red envelope expands with rainfall stress, runoff particles move downhill, and the selected relocation corridor carries simulated convoys. Trigger a road failure to see movement stop on Site B.</p></div>
           <div className="actionCard"><span>NEXT ACTION</span><b>Validate candidate sites + begin land / consent checks</b><p>SafeShift produces a planning recommendation, not an automated eviction order.</p></div>
         </>}
@@ -119,6 +140,7 @@ export default function Explore(){
           <PanelTitle over="HOUSEHOLDS" title="Who actually needs to move?"/>
           <div className="clusterList">{households.map(h=><div key={h.name} className={`cluster ${h.risk>=85?"critical":h.risk>=55?"watch":"safe"}`}><div><i/><span><b>{h.name}</b><small>{h.homes} households</small></span></div><strong>{h.risk}</strong><p>{h.note}</p></div>)}</div>
           <div className="simExplanation"><span>WHY PARTIAL?</span><b>138 homes dominate catastrophic exposure.</b><p>SafeShift treats relocation as a household-cluster decision rather than assuming that every family in a red-zone village must move.</p></div>
+          <button className="decisionNext" onClick={()=>setTab("sites")}>Next · test whether candidate sites can actually sustain them →</button>
         </>}
 
         {tab==="sites"&&<>
@@ -130,6 +152,7 @@ export default function Explore(){
             <div className="capacityResult"><span>FUNCTIONAL CARRYING CAPACITY</span><b>{functionalCapacity(current)} people</b><p>Limited by <strong>{bottleneck(current)}</strong>, not by empty land area.</p></div>
           </div>
           <div className={`upgradeCard ${upgrades[current.id]?"active":""}`}><div><Wrench/><span><b>{current.upgrade.label}</b><small>Illustrative · ₹{current.upgrade.costCr} Cr</small></span></div><p>Raises {current.upgrade.key} by +{current.upgrade.add} people and immediately re-ranks all sites.</p><button onClick={()=>setUpgrades(u=>({...u,[current.id]:!u[current.id]}))}>{upgrades[current.id]?"Remove upgrade":"Simulate upgrade"}</button></div>
+          <button className="decisionNext" onClick={()=>setTab("future")}>Next · stress-test this choice against a worse future →</button>
         </>}
 
         {tab==="future"&&<>
@@ -141,6 +164,7 @@ export default function Explore(){
           </div>
           <div className="futureTable"><div><span>Site</span><span>Score</span><span>Regret</span><span>Rank</span></div>{ranked.map((s,i)=><div key={s.id}><b>{s.id}</b><span>{s.score}</span><em>{s.regret}</em><strong>#{i+1}</strong></div>)}</div>
           <div className="actionCard"><span>LOW-REGRET RULE</span><b>Don’t optimize for today only.</b><p>Prefer the site least likely to become tomorrow’s new vulnerable settlement.</p></div>
+          <button className="decisionNext" onClick={()=>setTab("cohesion")}>Next · apply the community cohesion and consent gate →</button>
         </>}
 
         {tab==="cohesion"&&<>
@@ -148,6 +172,7 @@ export default function Explore(){
           <div className="cohesionHero"><HeartHandshake/><h2>Keep social units together.</h2><p>Optimization cannot scatter families, school groups and livelihood networks simply because it increases a score.</p></div>
           <div className="metricGrid"><Metric label="Neighbour clusters" value="88%"/><Metric label="School groups" value="93%"/><Metric label="Livelihood continuity" value={`${current.livelihood}%`}/><Metric label="Cohesion" value={`${current.cohesion}%`}/></div>
           <div className="dangerCard"><span>HARD GATE</span><b>Community consent not verified</b><p>Final status remains PLANNING CANDIDATE until land tenure and community consent are confirmed.</p></div>
+          <Link href="/brief" className="decisionNext">Finish · open the auditable decision brief →</Link>
         </>}
       </aside>
     </div>
