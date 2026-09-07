@@ -82,6 +82,22 @@ button, input, select { font-size: 14px; }
 .simExplanation p,
 .actionCard p { font-size: 12.5px !important; line-height: 1.55 !important; }
 
+/* Guided-demo mode: remove persistent dashboard chrome and let the Next buttons teach the flow. */
+@media (min-width: 821px) {
+  .workspaceGrid { grid-template-columns: minmax(0, 1fr) 420px !important; }
+  .rail { display: none !important; }
+  .simHud { display: none !important; }
+  .mapStressBar { display: none !important; }
+  .terrainBadge { display: none !important; }
+  .mapHeadline { max-width: 300px; }
+  .mapDecisionChip { top: 108px !important; }
+  .sidePanel { padding: 22px 20px 28px !important; }
+  .decisionHero { margin-top: 8px !important; }
+  .simExplanation { display: none !important; }
+  .actionCard { margin-top: 12px !important; }
+  .decisionNext { margin-top: 14px !important; padding: 13px 14px !important; font-size: 14px !important; }
+}
+
 /* Map annotations / ground intelligence */
 .groundDataMarker small { font-size: 10px !important; }
 .groundDataMarker b { font-size: 14px !important; }
