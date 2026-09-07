@@ -14,7 +14,7 @@ export default function Home(){
         <div className="eyebrow"><i/> SIH26191 · NDRF / MHA</div>
         <h1>Don’t wait for the next disaster to decide <em>where people can live.</em></h1>
         <p>SafeShift turns multi-hazard red zones into an actual relocation decision: who needs to move, which location can sustain them, and whether that choice still works under a worse future.</p>
-        <div className="heroActions"><Link href="/explore" className="primaryCta">Run Malin scenario <ArrowRight/></Link><a href="#workflow" className="secondaryCta">See decision logic</a></div>
+        <div className="heroActions"><Link href="/explore" className="primaryCta">Start 3-minute decision walkthrough <ArrowRight/></Link><a href="#workflow" className="secondaryCta">See decision logic</a></div>
         <div className="trustRow"><span><ShieldCheck/>Evidence before verdicts</span><span><HeartHandshake/>Community cohesion</span><span><Waypoints/>Future stress tests</span></div>
       </div>
       <div className="landingPreview">
@@ -24,7 +24,7 @@ export default function Home(){
       </div>
     </section>
 
-    <section className="sourceStrip"><div><small>HAZARD</small><b>multi-hazard evidence</b></div><div><small>PEOPLE</small><b>vulnerability clusters</b></div><div><small>SERVICES</small><b>water · health · school</b></div><div><small>NETWORK</small><b>roads + access</b></div><div><small>DECISION</small><b>stay · seasonal · partial · full</b></div><span>DEMO SNAPSHOT</span></section>
+    <section className="sourceStrip" aria-label="SafeShift judge demo path"><div><small>01 · COMPARE</small><b>Stay · partial · full</b></div><div><small>02 · CAPACITY</small><b>find weakest service</b></div><div><small>03 · UPGRADE</small><b>repair site viability</b></div><div><small>04 · STRESS</small><b>rain · road · growth</b></div><div><small>05 · GATE + BRIEF</small><b>consent · evidence · export</b></div><span>3–5 MIN JUDGE PATH</span></section>
 
     <section className="section" id="workflow"><span className="kicker">FROM RISK MAP TO HUMAN DECISION</span><h2>Not another red-zone dashboard.</h2><div className="workflowGrid"><Card n="01" icon={<TriangleAlert/>} title="Identify the red zone" text="Combine hazard intensity and vulnerability without hiding uncertainty."/><Card n="02" icon={<Users/>} title="Who actually needs to move?" text="Separate extreme-risk clusters instead of forcing all-or-nothing relocation."/><Card n="03" icon={<House/>} title="Functional carrying capacity" text="A site only supports as many people as its weakest essential service can sustain."/><Card n="04" icon={<CloudRain/>} title="Stress-test the future" text="Re-rank sites under heavier rainfall, road loss and population growth."/></div></section>
 
