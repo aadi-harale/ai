@@ -8,11 +8,18 @@ import {bottleneck,context,functionalCapacity,households,scoreSite,sites,type Ca
 import "./simulation.css";
 
 type Tab="decision"|"households"|"sites"|"future"|"cohesion";
+type Strategy="stay"|"partial"|"full";
 const steps:[Tab,string][]=[["decision","Strategy"],["households","Who moves"],["sites","Where"],["future","Stress test"],["cohesion","Consent"]];
 const pretty:Record<CapacityKey,string>={Housing:"Housing",Water:"Water",Healthcare:"Healthcare",School:"School",Roads:"Road access",Livelihood:"Livelihood"};
+const strategyCopy:Record<Strategy,{title:string,badge:string,homes:string,detail:string,map:string}>={
+  stay:{title:"Stay in place",badge:"HIGHEST RESIDUAL RISK",homes:"0 homes move",detail:"Preserves every livelihood tie, but leaves the highest-risk households exposed to the same catastrophic hazard.",map:"No relocation cost, but critical residual hazard remains."},
+  partial:{title:"Partial relocation",badge:"RECOMMENDED",homes:"138 homes move",detail:"Move the households driving catastrophic exposure while preserving most livelihood and community ties.",map:"Best trade-off between safety, livelihood continuity and social disruption."},
+  full:{title:"Full relocation",badge:"LOWEST EXPOSURE",homes:"491 homes move",detail:"Removes the whole settlement from exposure, but creates the greatest social, livelihood and infrastructure disruption.",map:"Lowest direct exposure, highest relocation and cohesion cost."}
+};
 
 export default function Explore(){
   const[tab,setTab]=useState<Tab>("decision");
+  const[strategy,setStrategy]=useState<Strategy>("partial");
   const[selected,setSelected]=useState("B");
   const[rain,setRain]=useState(20);
   const[roadFail,setRoadFail]=useState(false);
@@ -25,12 +32,12 @@ export default function Explore(){
   const selectSite=useCallback((id:string)=>{setSelected(id);setTab("sites")},[]);
   const briefHref=useMemo(()=>({pathname:"/brief",query:{site:current.id,rain:String(rain),road:roadFail?"1":"0",growth:String(growth),upgrade:upgrades[current.id]?"1":"0",score:String(current.score),capacity:String(functionalCapacity(current)),bottleneck:bottleneck(current),regret:String(current.regret)}}),[current,rain,roadFail,growth,upgrades]);
   const mapStatus=useMemo(()=>{
-    if(tab==="decision")return {title:"PARTIAL RELOCATION",detail:"Compare stay vs partial vs full before moving anyone."};
+    if(tab==="decision")return {title:strategyCopy[strategy].title.toUpperCase(),detail:strategyCopy[strategy].map};
     if(tab==="households")return {title:`${context.extremeHouseholds} OF ${context.households} HOMES`,detail:"Risk is concentrated — do not move the whole village by default."};
     if(tab==="sites")return {title:`SITE ${current.id} · ${current.score}/100`,detail:`Capacity ${functionalCapacity(current)} people · bottleneck ${bottleneck(current)}.`};
     if(tab==="future")return {title:`+${rain}% RAIN · ${roadFail?"ROAD FAILED":"ROAD OPEN"}`,detail:`Site ${current.id} is rank #${ranked.findIndex(s=>s.id===current.id)+1} · regret ${current.regret}.`};
     return {title:"CONSENT GATE",detail:`Site ${current.id} remains a planning candidate until consent and tenure are verified.`};
-  },[tab,current,rain,roadFail,ranked]);
+  },[tab,strategy,current,rain,roadFail,ranked]);
 
   return <main className="workspace guidedWorkspace">
     <header className="workspaceHeader">
@@ -53,13 +60,13 @@ export default function Explore(){
         <aside className="sidePanel guidedPanel">
           {tab==="decision"&&<>
             <PanelTitle over="STEP 1 OF 5" title="Choose the relocation strategy"/>
-            <div className="decisionHero"><span>RECOMMENDED</span><h2>Partial relocation</h2><p>Move the 138 households driving catastrophic exposure while preserving most livelihood and community ties.</p></div>
+            <div className="decisionHero"><span>{strategyCopy[strategy].badge}</span><h2>{strategyCopy[strategy].title}</h2><p>{strategyCopy[strategy].detail}</p></div>
             <div className="strategyGrid guidedStrategies">
-              <button className="strategyCard"><span>STAY</span><b>0 homes move</b><small>Critical residual hazard remains.</small></button>
-              <button className="strategyCard recommended"><span>BEST TRADE-OFF</span><b>138 homes move</b><small>Low residual risk with high livelihood continuity.</small></button>
-              <button className="strategyCard"><span>FULL MOVE</span><b>491 homes move</b><small>Lowest exposure, highest social disruption.</small></button>
+              <button aria-pressed={strategy==="stay"} onClick={()=>setStrategy("stay")} className={`strategyCard ${strategy==="stay"?"selected":""}`}><span>STAY</span><b>0 homes move</b><small>Critical residual hazard remains.</small></button>
+              <button aria-pressed={strategy==="partial"} onClick={()=>setStrategy("partial")} className={`strategyCard recommended ${strategy==="partial"?"selected":""}`}><span>BEST TRADE-OFF</span><b>138 homes move</b><small>Low residual risk with high livelihood continuity.</small></button>
+              <button aria-pressed={strategy==="full"} onClick={()=>setStrategy("full")} className={`strategyCard ${strategy==="full"?"selected":""}`}><span>FULL MOVE</span><b>491 homes move</b><small>Lowest exposure, highest social disruption.</small></button>
             </div>
-            <button className="decisionNext" onClick={()=>setTab("households")}>Next · show why only 138 households move →</button>
+            <button className="decisionNext" disabled={strategy!=="partial"} onClick={()=>setTab("households")}>{strategy==="partial"?"Next · show why only 138 households move →":"Choose Partial relocation to continue this walkthrough"}</button>
           </>}
 
           {tab==="households"&&<>
