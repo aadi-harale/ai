@@ -23,6 +23,7 @@ export default function Explore(){
   const ranked=useMemo(()=>sites.map(s=>scoreSite(s,rain,roadFail,growth,!!upgrades[s.id])).sort((a,b)=>b.score-a.score),[rain,roadFail,growth,upgrades]);
   const current=ranked.find(s=>s.id===selected)??ranked[0];
   const selectSite=useCallback((id:string)=>{setSelected(id);setTab("sites")},[]);
+  const briefHref=useMemo(()=>({pathname:"/brief",query:{site:current.id,rain:String(rain),road:roadFail?"1":"0",growth:String(growth),upgrade:upgrades[current.id]?"1":"0",score:String(current.score),capacity:String(functionalCapacity(current)),bottleneck:bottleneck(current),regret:String(current.regret)}}),[current,rain,roadFail,growth,upgrades]);
 
   useEffect(()=>{
     if(!playing)return;
@@ -34,149 +35,29 @@ export default function Explore(){
   const movedNow=Math.min(context.extremeHouseholds,Math.max(0,Math.round((simMinute-8)*2.25)));
   const routeStatus=roadFail&&selected==="B"?"Corridor B halted":simMinute<8?"Mobilising":simMinute<45?"Convoy moving":"Arrival phase";
 
-  const reset=()=>{
-    setTab("decision");setSelected("B");setRain(20);setRoadFail(false);setGrowth(10);setUpgrades({A:false,B:false,C:false});setSimMinute(18);setPlaying(true);
-  };
+  const reset=()=>{setTab("decision");setSelected("B");setRain(20);setRoadFail(false);setGrowth(10);setUpgrades({A:false,B:false,C:false});setSimMinute(18);setPlaying(true)};
 
   return <main className="workspace">
-    <header className="workspaceHeader">
-      <div>
-        <Link href="/" className="back"><ArrowLeft/></Link>
-        <div className="miniBrand">▲ <b>SAFESHIFT</b></div>
-        <span className="divider"/>
-        <div><b>Malin relocation scenario</b><small>Ambegaon, Pune · interactive planning simulation</small></div>
-      </div>
-      <Link href="/brief" className="outlineButton">Decision brief</Link>
-    </header>
-
-    <div className="evidenceStrip">
-      <span><i className="green"/> Study location <b>REAL</b></span>
-      <span><i className="amber"/> Hazard envelope <b>DEMO</b></span>
-      <span><i className="amber"/> Relocation corridors <b>SCHEMATIC</b></span>
-      <span><i className="amber"/> Site capacities <b>DEMO</b></span>
-      <em>Evidence coverage {context.evidence}% · planning support, not an official relocation order</em>
-    </div>
-
+    <header className="workspaceHeader"><div><Link href="/" className="back"><ArrowLeft/></Link><div className="miniBrand">▲ <b>SAFESHIFT</b></div><span className="divider"/><div><b>Malin relocation scenario</b><small>Ambegaon, Pune · interactive planning simulation</small></div></div><Link href={briefHref} className="outlineButton">Decision brief</Link></header>
+    <div className="evidenceStrip"><span><i className="green"/> Study location <b>REAL</b></span><span><i className="amber"/> Hazard envelope <b>DEMO</b></span><span><i className="amber"/> Relocation corridors <b>SCHEMATIC</b></span><span><i className="amber"/> Site capacities <b>DEMO</b></span><em>Evidence coverage {context.evidence}% · planning support, not an official relocation order</em></div>
     <div className="workspaceGrid">
-      <aside className="rail">
-        <Rail active={tab==="decision"} icon={<BarChart3/>} text="Decision" click={()=>setTab("decision")}/>
-        <Rail active={tab==="households"} icon={<Users/>} text="Households" click={()=>setTab("households")}/>
-        <Rail active={tab==="sites"} icon={<MapPinned/>} text="Sites" click={()=>setTab("sites")}/>
-        <Rail active={tab==="future"} icon={<CloudRain/>} text="Futures" click={()=>setTab("future")}/>
-        <Rail active={tab==="cohesion"} icon={<HeartHandshake/>} text="Cohesion" click={()=>setTab("cohesion")}/>
-        <div className="spacer"/>
-        <Rail icon={<RotateCcw/>} text="Reset" click={reset}/>
-      </aside>
-
+      <aside className="rail"><Rail active={tab==="decision"} icon={<BarChart3/>} text="Decision" click={()=>setTab("decision")}/><Rail active={tab==="households"} icon={<Users/>} text="Households" click={()=>setTab("households")}/><Rail active={tab==="sites"} icon={<MapPinned/>} text="Sites" click={()=>setTab("sites")}/><Rail active={tab==="future"} icon={<CloudRain/>} text="Futures" click={()=>setTab("future")}/><Rail active={tab==="cohesion"} icon={<HeartHandshake/>} text="Cohesion" click={()=>setTab("cohesion")}/><div className="spacer"/><Rail icon={<RotateCcw/>} text="Reset" click={reset}/></aside>
       <section className="mapArea">
         <SafeShiftMap sites={ranked} selected={selected} onSelect={selectSite} rain={rain} roadFail={roadFail} simMinute={simMinute} playing={playing}/>
-
-        <div className="mapHeadline">
-          <span>● LIVE DECISION SIMULATION</span>
-          <b>{context.location}</b>
-          <small>{context.population.toLocaleString("en-IN")} people · {context.households} households</small>
-        </div>
-
-        <div className="mapDecisionChip">
-          <b>PARTIAL RELOCATION</b>
-          <span>{context.extremeHouseholds} highest-risk households prioritised</span>
-        </div>
-
-        <div className="simHud">
-          <span>SIMULATION STATE · T+{simMinute} MIN</span>
-          <div>
-            <article className="critical"><span>Extreme-risk homes exposed</span><b>{exposedNow}</b></article>
-            <article className="moving"><span>Households moved / mobilised</span><b>{movedNow}</b></article>
-            <article><span>Selected destination</span><b>Site {selected}</b></article>
-            <article><span>Corridor state</span><b>{roadFail&&selected==="B"?"BLOCKED":"OPEN"}</b></article>
-          </div>
-          <footer>{routeStatus}. Blue particles show simulated runoff; pale-green dots show relocation movement along the selected schematic corridor.</footer>
-        </div>
-
-        <div className="mapStressBar">
-          <button className="simPlay" onClick={()=>setPlaying(p=>!p)} aria-label={playing?"Pause simulation":"Play simulation"}>{playing?<Pause/>:<Play/>}</button>
-          <div className="simClock"><span>Scenario clock</span><b>T+{simMinute} min</b></div>
-          <input className="timelineRange" aria-label="Simulation minute" type="range" min="0" max="60" step="1" value={simMinute} onChange={e=>{setSimMinute(+e.target.value);setPlaying(false)}}/>
-          <div className="stressControl"><CloudRain/><span>Rainfall stress<b>+{rain}%</b></span><input aria-label="Rainfall stress" type="range" min="0" max="40" step="10" value={rain} onChange={e=>setRain(+e.target.value)}/></div>
-          <label className="roadToggle"><input type="checkbox" checked={roadFail} onChange={e=>setRoadFail(e.target.checked)}/> Fail primary corridor</label>
-        </div>
+        <div className="mapHeadline"><span>● LIVE DECISION SIMULATION</span><b>{context.location}</b><small>{context.population.toLocaleString("en-IN")} people · {context.households} households</small></div>
+        <div className="mapDecisionChip"><b>PARTIAL RELOCATION</b><span>{context.extremeHouseholds} highest-risk households prioritised</span></div>
+        <div className="simHud"><span>SIMULATION STATE · T+{simMinute} MIN</span><div><article className="critical"><span>Extreme-risk homes exposed</span><b>{exposedNow}</b></article><article className="moving"><span>Households moved / mobilised</span><b>{movedNow}</b></article><article><span>Selected destination</span><b>Site {selected}</b></article><article><span>Corridor state</span><b>{roadFail&&selected==="B"?"BLOCKED":"OPEN"}</b></article></div><footer>{routeStatus}. Blue particles show simulated runoff; pale-green dots show relocation movement along the selected schematic corridor.</footer></div>
+        <div className="mapStressBar"><button className="simPlay" onClick={()=>setPlaying(p=>!p)} aria-label={playing?"Pause simulation":"Play simulation"}>{playing?<Pause/>:<Play/>}</button><div className="simClock"><span>Scenario clock</span><b>T+{simMinute} min</b></div><input className="timelineRange" aria-label="Simulation minute" type="range" min="0" max="60" step="1" value={simMinute} onChange={e=>{setSimMinute(+e.target.value);setPlaying(false)}}/><div className="stressControl"><CloudRain/><span>Rainfall stress<b>+{rain}%</b></span><input aria-label="Rainfall stress" type="range" min="0" max="40" step="10" value={rain} onChange={e=>setRain(+e.target.value)}/></div><label className="roadToggle"><input type="checkbox" checked={roadFail} onChange={e=>setRoadFail(e.target.checked)}/> Fail primary corridor</label></div>
       </section>
-
       <aside className="sidePanel">
-        {tab==="decision"&&<>
-          <PanelTitle over="DECISION" title="Relocation strategy"/>
-          <div className="decisionHero">
-            <span>RECOMMENDED STRATEGY</span>
-            <h2>Partial relocation</h2>
-            <p>Catastrophic exposure is concentrated in the upper-slope and central clusters. Move those households first instead of displacing the whole village.</p>
-            <div className="metricGrid"><Metric label="Extreme-risk homes" value="138"/><Metric label="Village share" value="28%"/><Metric label="Evidence" value="82%"/><Metric label="Confidence" value="High"/></div>
-          </div>
-          <section className="strategyCompare" aria-label="Stay versus relocation strategy comparison">
-            <header><span>STAY vs MOVE SIMULATOR</span><b>Why partial wins</b></header>
-            <div className="strategyGrid">
-              <button className="strategyCard" onClick={()=>{setRain(40);setRoadFail(true);setTab("future")}}>
-                <span>OPTION 01</span><b>Stay</b>
-                <dl><div><dt>Displaced</dt><dd>0 homes</dd></div><div><dt>Residual risk</dt><dd>Critical</dd></div><div><dt>Livelihood</dt><dd>100%</dd></div></dl>
-                <small>Lowest disruption, but catastrophic exposure remains concentrated.</small>
-              </button>
-              <button className="strategyCard recommended" onClick={()=>setTab("households")}>
-                <span>RECOMMENDED</span><b>Partial move</b>
-                <dl><div><dt>Displaced</dt><dd>138 homes</dd></div><div><dt>Residual risk</dt><dd>Low</dd></div><div><dt>Livelihood</dt><dd>High</dd></div></dl>
-                <small>Moves the highest-risk clusters while preserving most community and livelihood ties.</small>
-              </button>
-              <button className="strategyCard" onClick={()=>setTab("cohesion")}>
-                <span>OPTION 03</span><b>Full move</b>
-                <dl><div><dt>Displaced</dt><dd>491 homes</dd></div><div><dt>Residual risk</dt><dd>Lowest</dd></div><div><dt>Livelihood</dt><dd>Fragile</dd></div></dl>
-                <small>Reduces hazard exposure most, but maximizes social and livelihood disruption.</small>
-              </button>
-            </div>
-          </section>
-          <button className="decisionNext" onClick={()=>setTab("households")}>Next · inspect the 138 households driving the decision →</button>
-          <div className="simExplanation"><span>WHAT THE MAP IS DOING</span><b>Risk, runoff and evacuation movement change with time.</b><p>The red envelope expands with rainfall stress, runoff particles move downhill, and the selected relocation corridor carries simulated convoys. Trigger a road failure to see movement stop on Site B.</p></div>
-          <div className="actionCard"><span>NEXT ACTION</span><b>Validate candidate sites + begin land / consent checks</b><p>SafeShift produces a planning recommendation, not an automated eviction order.</p></div>
-        </>}
-
-        {tab==="households"&&<>
-          <PanelTitle over="HOUSEHOLDS" title="Who actually needs to move?"/>
-          <div className="clusterList">{households.map(h=><div key={h.name} className={`cluster ${h.risk>=85?"critical":h.risk>=55?"watch":"safe"}`}><div><i/><span><b>{h.name}</b><small>{h.homes} households</small></span></div><strong>{h.risk}</strong><p>{h.note}</p></div>)}</div>
-          <div className="simExplanation"><span>WHY PARTIAL?</span><b>138 homes dominate catastrophic exposure.</b><p>SafeShift treats relocation as a household-cluster decision rather than assuming that every family in a red-zone village must move.</p></div>
-          <button className="decisionNext" onClick={()=>setTab("sites")}>Next · test whether candidate sites can actually sustain them →</button>
-        </>}
-
-        {tab==="sites"&&<>
-          <PanelTitle over="CANDIDATE SITES" title="Where could they move?"/>
-          <div className="siteRanking">{ranked.map((s,i)=><button key={s.id} className={`siteRow ${selected===s.id?"selected":""}`} onClick={()=>setSelected(s.id)}><span>{i+1}</span><div><b>Site {s.id} · {s.name}</b><small>{functionalCapacity(s)} people · bottleneck {bottleneck(s)}</small></div><strong>{s.score}</strong></button>)}</div>
-          <div className="siteDetail">
-            <div className="detailHeader"><div><span>SITE {current.id}</span><b>{current.name}</b></div><strong>{current.score}/100</strong></div>
-            <div className="capacityBars">{(Object.entries(current.capacity) as [CapacityKey,number][]).map(([k,v])=><div key={k} className={k===bottleneck(current)?"bottleneck":""}><span>{pretty[k]}<b>{v}</b></span><i><em style={{width:`${Math.min(100,v/10)}%`}}/></i></div>)}</div>
-            <div className="capacityResult"><span>FUNCTIONAL CARRYING CAPACITY</span><b>{functionalCapacity(current)} people</b><p>Limited by <strong>{bottleneck(current)}</strong>, not by empty land area.</p></div>
-          </div>
-          <div className={`upgradeCard ${upgrades[current.id]?"active":""}`}><div><Wrench/><span><b>{current.upgrade.label}</b><small>Illustrative · ₹{current.upgrade.costCr} Cr</small></span></div><p>Raises {current.upgrade.key} by +{current.upgrade.add} people and immediately re-ranks all sites.</p><button onClick={()=>setUpgrades(u=>({...u,[current.id]:!u[current.id]}))}>{upgrades[current.id]?"Remove upgrade":"Simulate upgrade"}</button></div>
-          <button className="decisionNext" onClick={()=>setTab("future")}>Next · stress-test this choice against a worse future →</button>
-        </>}
-
-        {tab==="future"&&<>
-          <PanelTitle over="LOW-REGRET TEST" title="Will the choice survive?"/>
-          <div className="futureControl">
-            <label><span>Extreme rainfall<b>+{rain}%</b></span><input type="range" min="0" max="40" step="10" value={rain} onChange={e=>setRain(+e.target.value)}/></label>
-            <label><span>Population growth<b>+{growth}%</b></span><input type="range" min="0" max="20" step="5" value={growth} onChange={e=>setGrowth(+e.target.value)}/></label>
-            <label className="check"><input type="checkbox" checked={roadFail} onChange={e=>setRoadFail(e.target.checked)}/> Assume primary-road failure</label>
-          </div>
-          <div className="futureTable"><div><span>Site</span><span>Score</span><span>Regret</span><span>Rank</span></div>{ranked.map((s,i)=><div key={s.id}><b>{s.id}</b><span>{s.score}</span><em>{s.regret}</em><strong>#{i+1}</strong></div>)}</div>
-          <div className="actionCard"><span>LOW-REGRET RULE</span><b>Don’t optimize for today only.</b><p>Prefer the site least likely to become tomorrow’s new vulnerable settlement.</p></div>
-          <button className="decisionNext" onClick={()=>setTab("cohesion")}>Next · apply the community cohesion and consent gate →</button>
-        </>}
-
-        {tab==="cohesion"&&<>
-          <PanelTitle over="SOCIAL CONSTRAINT" title="Will the community survive?"/>
-          <div className="cohesionHero"><HeartHandshake/><h2>Keep social units together.</h2><p>Optimization cannot scatter families, school groups and livelihood networks simply because it increases a score.</p></div>
-          <div className="metricGrid"><Metric label="Neighbour clusters" value="88%"/><Metric label="School groups" value="93%"/><Metric label="Livelihood continuity" value={`${current.livelihood}%`}/><Metric label="Cohesion" value={`${current.cohesion}%`}/></div>
-          <div className="dangerCard"><span>HARD GATE</span><b>Community consent not verified</b><p>Final status remains PLANNING CANDIDATE until land tenure and community consent are confirmed.</p></div>
-          <Link href="/brief" className="decisionNext">Finish · open the auditable decision brief →</Link>
-        </>}
+        {tab==="decision"&&<><PanelTitle over="DECISION" title="Relocation strategy"/><div className="decisionHero"><span>RECOMMENDED STRATEGY</span><h2>Partial relocation</h2><p>Catastrophic exposure is concentrated in the upper-slope and central clusters. Move those households first instead of displacing the whole village.</p><div className="metricGrid"><Metric label="Extreme-risk homes" value="138"/><Metric label="Village share" value="28%"/><Metric label="Evidence" value="82%"/><Metric label="Confidence" value="High"/></div></div><section className="strategyCompare" aria-label="Stay versus relocation strategy comparison"><header><span>STAY vs MOVE SIMULATOR</span><b>Why partial wins</b></header><div className="strategyGrid"><button className="strategyCard" onClick={()=>{setRain(40);setRoadFail(true);setTab("future")}}><span>OPTION 01</span><b>Stay</b><dl><div><dt>Displaced</dt><dd>0 homes</dd></div><div><dt>Residual risk</dt><dd>Critical</dd></div><div><dt>Livelihood</dt><dd>100%</dd></div></dl><small>Lowest disruption, but catastrophic exposure remains concentrated.</small></button><button className="strategyCard recommended" onClick={()=>setTab("households")}><span>RECOMMENDED</span><b>Partial move</b><dl><div><dt>Displaced</dt><dd>138 homes</dd></div><div><dt>Residual risk</dt><dd>Low</dd></div><div><dt>Livelihood</dt><dd>High</dd></div></dl><small>Moves the highest-risk clusters while preserving most community and livelihood ties.</small></button><button className="strategyCard" onClick={()=>setTab("cohesion")}><span>OPTION 03</span><b>Full move</b><dl><div><dt>Displaced</dt><dd>491 homes</dd></div><div><dt>Residual risk</dt><dd>Lowest</dd></div><div><dt>Livelihood</dt><dd>Fragile</dd></div></dl><small>Reduces hazard exposure most, but maximizes social and livelihood disruption.</small></button></div></section><button className="decisionNext" onClick={()=>setTab("households")}>Next · inspect the 138 households driving the decision →</button><div className="simExplanation"><span>WHAT THE MAP IS DOING</span><b>Risk, runoff and evacuation movement change with time.</b><p>The red envelope expands with rainfall stress, runoff particles move downhill, and the selected relocation corridor carries simulated convoys. Trigger a road failure to see movement stop on Site B.</p></div><div className="actionCard"><span>NEXT ACTION</span><b>Validate candidate sites + begin land / consent checks</b><p>SafeShift produces a planning recommendation, not an automated eviction order.</p></div></>}
+        {tab==="households"&&<><PanelTitle over="HOUSEHOLDS" title="Who actually needs to move?"/><div className="clusterList">{households.map(h=><div key={h.name} className={`cluster ${h.risk>=85?"critical":h.risk>=55?"watch":"safe"}`}><div><i/><span><b>{h.name}</b><small>{h.homes} households</small></span></div><strong>{h.risk}</strong><p>{h.note}</p></div>)}</div><div className="simExplanation"><span>WHY PARTIAL?</span><b>138 homes dominate catastrophic exposure.</b><p>SafeShift treats relocation as a household-cluster decision rather than assuming that every family in a red-zone village must move.</p></div><button className="decisionNext" onClick={()=>setTab("sites")}>Next · test whether candidate sites can actually sustain them →</button></>}
+        {tab==="sites"&&<><PanelTitle over="CANDIDATE SITES" title="Where could they move?"/><div className="siteRanking">{ranked.map((s,i)=><button key={s.id} className={`siteRow ${selected===s.id?"selected":""}`} onClick={()=>setSelected(s.id)}><span>{i+1}</span><div><b>Site {s.id} · {s.name}</b><small>{functionalCapacity(s)} people · bottleneck {bottleneck(s)}</small></div><strong>{s.score}</strong></button>)}</div><div className="siteDetail"><div className="detailHeader"><div><span>SITE {current.id}</span><b>{current.name}</b></div><strong>{current.score}/100</strong></div><div className="capacityBars">{(Object.entries(current.capacity) as [CapacityKey,number][]).map(([k,v])=><div key={k} className={k===bottleneck(current)?"bottleneck":""}><span>{pretty[k]}<b>{v}</b></span><i><em style={{width:`${Math.min(100,v/10)}%`}}/></i></div>)}</div><div className="capacityResult"><span>FUNCTIONAL CARRYING CAPACITY</span><b>{functionalCapacity(current)} people</b><p>Limited by <strong>{bottleneck(current)}</strong>, not by empty land area.</p></div></div><div className={`upgradeCard ${upgrades[current.id]?"active":""}`}><div><Wrench/><span><b>{current.upgrade.label}</b><small>Illustrative · ₹{current.upgrade.costCr} Cr</small></span></div><p>Raises {current.upgrade.key} by +{current.upgrade.add} people and immediately re-ranks all sites.</p><button onClick={()=>setUpgrades(u=>({...u,[current.id]:!u[current.id]}))}>{upgrades[current.id]?"Remove upgrade":"Simulate upgrade"}</button></div><button className="decisionNext" onClick={()=>setTab("future")}>Next · stress-test this choice against a worse future →</button></>}
+        {tab==="future"&&<><PanelTitle over="LOW-REGRET TEST" title="Will the choice survive?"/><div className="futureControl"><label><span>Extreme rainfall<b>+{rain}%</b></span><input type="range" min="0" max="40" step="10" value={rain} onChange={e=>setRain(+e.target.value)}/></label><label><span>Population growth<b>+{growth}%</b></span><input type="range" min="0" max="20" step="5" value={growth} onChange={e=>setGrowth(+e.target.value)}/></label><label className="check"><input type="checkbox" checked={roadFail} onChange={e=>setRoadFail(e.target.checked)}/> Assume primary-road failure</label></div><div className="futureTable"><div><span>Site</span><span>Score</span><span>Regret</span><span>Rank</span></div>{ranked.map((s,i)=><div key={s.id}><b>{s.id}</b><span>{s.score}</span><em>{s.regret}</em><strong>#{i+1}</strong></div>)}</div><div className="actionCard"><span>LOW-REGRET RULE</span><b>Don’t optimize for today only.</b><p>Prefer the site least likely to become tomorrow’s new vulnerable settlement.</p></div><button className="decisionNext" onClick={()=>setTab("cohesion")}>Next · apply the community cohesion and consent gate →</button></>}
+        {tab==="cohesion"&&<><PanelTitle over="SOCIAL CONSTRAINT" title="Will the community survive?"/><div className="cohesionHero"><HeartHandshake/><h2>Keep social units together.</h2><p>Optimization cannot scatter families, school groups and livelihood networks simply because it increases a score.</p></div><div className="metricGrid"><Metric label="Neighbour clusters" value="88%"/><Metric label="School groups" value="93%"/><Metric label="Livelihood continuity" value={`${current.livelihood}%`}/><Metric label="Cohesion" value={`${current.cohesion}%`}/></div><div className="dangerCard"><span>HARD GATE</span><b>Community consent not verified</b><p>Final status remains PLANNING CANDIDATE until land tenure and community consent are confirmed.</p></div><Link href={briefHref} className="decisionNext">Finish · open this scenario’s auditable decision brief →</Link></>}
       </aside>
     </div>
-  </main>;
+  </main>
 }
 
 function Rail({active=false,icon,text,click}:{active?:boolean;icon:React.ReactNode;text:string;click:()=>void}){return <button className={active?"active":""} onClick={click}>{icon}<span>{text}</span></button>}
