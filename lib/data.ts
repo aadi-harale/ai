@@ -23,11 +23,11 @@ export const cautionZone:[number,number][]= [[73.6650,19.1815],[73.6800,19.1900]
 
 export function functionalCapacity(site:Site){return Math.min(...Object.values(site.capacity));}
 export function bottleneck(site:Site){return Object.entries(site.capacity).sort((a,b)=>a[1]-b[1])[0][0] as CapacityKey;}
-export function scoreSite(site:Site,rain:number,roadFail:boolean,growth:number,upgraded:boolean){
+export function scoreSite(site:Site,rain:number,roadFail:boolean,growth:number,upgraded:boolean,hazardShift=0){
   const copy:Site={...site,capacity:{...site.capacity}};
   if(upgraded)copy.capacity[copy.upgrade.key]+=copy.upgrade.add;
   const service=Math.min(100,functionalCapacity(copy)/9.5);
-  const future=Math.max(0,100-copy.hazard-(rain/40)*Math.max(4,24-copy.hazard/4)-(roadFail?12:0)-growth/2);
+  const future=Math.max(0,100-copy.hazard-hazardShift-(rain/40)*Math.max(4,24-copy.hazard/4)-(roadFail?12:0)-growth/2);
   const social=(copy.cohesion+copy.livelihood)/2;
   const score=Math.round(future*.44+service*.34+social*.22);
   return {...copy,score,regret:100-score,future:Math.round(future)};
