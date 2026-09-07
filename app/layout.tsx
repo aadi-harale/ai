@@ -5,6 +5,7 @@ import "./map-polish.css";
 import "./ground-intel.css";
 import "./readability.css";
 import "./terrain-upgrade.css";
+import "./map-controls-fix.css";
 
 export const metadata:Metadata={
   title:"SafeShift — SIH26191",
