@@ -24,11 +24,18 @@ export default function Explore(){
   const stepIndex=steps.findIndex(([id])=>id===tab);
   const selectSite=useCallback((id:string)=>{setSelected(id);setTab("sites")},[]);
   const briefHref=useMemo(()=>({pathname:"/brief",query:{site:current.id,rain:String(rain),road:roadFail?"1":"0",growth:String(growth),upgrade:upgrades[current.id]?"1":"0",score:String(current.score),capacity:String(functionalCapacity(current)),bottleneck:bottleneck(current),regret:String(current.regret)}}),[current,rain,roadFail,growth,upgrades]);
+  const mapStatus=useMemo(()=>{
+    if(tab==="decision")return {title:"PARTIAL RELOCATION",detail:"Compare stay vs partial vs full before moving anyone."};
+    if(tab==="households")return {title:`${context.extremeHouseholds} OF ${context.households} HOMES`,detail:"Risk is concentrated — do not move the whole village by default."};
+    if(tab==="sites")return {title:`SITE ${current.id} · ${current.score}/100`,detail:`Capacity ${functionalCapacity(current)} people · bottleneck ${bottleneck(current)}.`};
+    if(tab==="future")return {title:`+${rain}% RAIN · ${roadFail?"ROAD FAILED":"ROAD OPEN"}`,detail:`Site ${current.id} is rank #${ranked.findIndex(s=>s.id===current.id)+1} · regret ${current.regret}.`};
+    return {title:"CONSENT GATE",detail:`Site ${current.id} remains a planning candidate until consent and tenure are verified.`};
+  },[tab,current,rain,roadFail,ranked]);
 
   return <main className="workspace guidedWorkspace">
     <header className="workspaceHeader">
       <div><Link href="/" className="back"><ArrowLeft/></Link><div className="miniBrand">▲ <b>SAFESHIFT</b></div><span className="divider"/><div><b>Malin relocation scenario</b><small>Illustrative planning demo · Ambegaon, Pune</small></div></div>
-      <Link href={briefHref} className="outlineButton">Decision brief</Link>
+      {tab==="cohesion"?<Link href={briefHref} className="outlineButton">Open decision brief</Link>:<span className="outlineButton" aria-label={`Step ${stepIndex+1} of 5`}>Step {stepIndex+1} of 5</span>}
     </header>
 
     <div className="guidedShell">
@@ -40,7 +47,7 @@ export default function Explore(){
         <section className="mapArea guidedMap">
           <SafeShiftMap sites={ranked} selected={selected} onSelect={selectSite} rain={rain} roadFail={roadFail} simMinute={18} playing={false}/>
           <div className="mapHeadline"><span>DECISION TWIN</span><b>{context.location}</b><small>{context.population.toLocaleString("en-IN")} people · {context.households} households</small></div>
-          <div className="mapDecisionChip"><b>{tab==="future"?`+${rain}% RAIN · ${roadFail?"ROAD FAILED":"ROAD OPEN"}`:"PARTIAL RELOCATION"}</b><span>{tab==="sites"?`Site ${current.id} selected · ${functionalCapacity(current)} people capacity`:`${context.extremeHouseholds} highest-risk households prioritised`}</span></div>
+          <div className="mapDecisionChip"><b>{mapStatus.title}</b><span>{mapStatus.detail}</span></div>
         </section>
 
         <aside className="sidePanel guidedPanel">
